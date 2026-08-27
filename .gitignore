@@ -1,0 +1,23 @@
+# Go cache and build artifacts
+.gocache/
+*.exe
+*.test
+coverage.out
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Frontend dependencies and production builds
+frontend/node_modules/
+frontend/build/
+
+# Logs and editor files
+*.log
+npm-debug.log*
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
