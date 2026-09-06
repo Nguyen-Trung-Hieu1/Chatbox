@@ -21,3 +21,6 @@ npm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local migration backups (contain private application data)
+.migration-private/

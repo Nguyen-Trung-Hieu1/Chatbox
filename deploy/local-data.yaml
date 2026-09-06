@@ -1,0 +1,93 @@
+# Local, single-node WSL setup. Data stays on this Ubuntu instance.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chatbox1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: chatbox1
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: mongodb}
+  template:
+    metadata:
+      labels: {app: mongodb}
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:8.2
+          envFrom:
+            - secretRef: {name: mongodb-auth}
+          ports:
+            - containerPort: 27017
+          readinessProbe:
+            tcpSocket: {port: 27017}
+            initialDelaySeconds: 5
+          volumeMounts:
+            - {name: data, mountPath: /data/db}
+            - {name: backup, mountPath: /migration, readOnly: true}
+      volumes:
+        - name: data
+          hostPath: {path: /var/lib/chatbox1-data/mongodb, type: Directory}
+        - name: backup
+          hostPath: {path: /var/lib/chatbox1-migration/20260906/mongo, type: Directory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: chatbox1
+spec:
+  selector: {app: mongodb}
+  ports:
+    - {port: 27017, targetPort: 27017}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: router
+  namespace: chatbox1
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: router}
+  template:
+    metadata:
+      labels: {app: router}
+    spec:
+      containers:
+        - name: router
+          image: chatbox1-9router:local
+          imagePullPolicy: Never
+          env:
+            - {name: DATA_DIR, value: /app/data}
+            - {name: PORT, value: '20128'}
+            - {name: HOSTNAME, value: 0.0.0.0}
+          ports:
+            - containerPort: 20128
+          readinessProbe:
+            tcpSocket: {port: 20128}
+            initialDelaySeconds: 10
+          volumeMounts:
+            - {name: data, mountPath: /app/data}
+      volumes:
+        - name: data
+          hostPath: {path: /var/lib/chatbox1-data/9router, type: Directory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: router
+  namespace: chatbox1
+spec:
+  selector: {app: router}
+  ports:
+    - {port: 20128, targetPort: 20128}

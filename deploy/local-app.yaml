@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: chatbox-backend, namespace: chatbox1}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: chatbox-backend}
+  template:
+    metadata:
+      labels: {app: chatbox-backend}
+    spec:
+      containers:
+        - name: backend
+          image: chatbox1-backend:local
+          imagePullPolicy: Never
+          envFrom:
+            - secretRef: {name: chatbox-backend-config}
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 3
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata: {name: chatbox-backend, namespace: chatbox1}
+spec:
+  selector: {app: chatbox-backend}
+  ports:
+    - {port: 8080, targetPort: 8080}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: chatbox-frontend, namespace: chatbox1}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: chatbox-frontend}
+  template:
+    metadata:
+      labels: {app: chatbox-frontend}
+    spec:
+      containers:
+        - name: frontend
+          image: chatbox1-frontend:local
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet: {path: /, port: 80}
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata: {name: chatbox-frontend, namespace: chatbox1}
+spec:
+  selector: {app: chatbox-frontend}
+  ports:
+    - {port: 80, targetPort: 80}
