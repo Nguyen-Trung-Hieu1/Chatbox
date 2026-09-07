@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -55,3 +55,23 @@ jobs:
           labels: org.opencontainers.image.source=https://github.com/Nguyen-Trung-Hieu1/Chatbox
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+  update-deployment:
+    needs: [build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point K3s at the images from this commit
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          sed -i "s|image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:.*|image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:${IMAGE_TAG}|" deploy/local-app.yaml
+          sed -i "s|image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:.*|image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:${IMAGE_TAG}|" deploy/local-app.yaml
+      - name: Commit the new image version
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/local-app.yaml
+          git commit -m "Deploy Chatbox1 ${GITHUB_SHA::7}"
+          git push

@@ -11,8 +11,8 @@ spec:
     spec:
       containers:
         - name: backend
-          image: chatbox1-backend:local
-          imagePullPolicy: Never
+          image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:sha-e7e4f23d06dcae229244c9f7259f4659b0bef065
+          imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef: {name: chatbox-backend-config}
           ports:
@@ -43,8 +43,8 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: chatbox1-frontend:local
-          imagePullPolicy: Never
+          image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:sha-e7e4f23d06dcae229244c9f7259f4659b0bef065
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
           readinessProbe:
