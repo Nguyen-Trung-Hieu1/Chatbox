@@ -37,13 +37,28 @@ const languageNames = {
   cs: 'C#', csharp: 'C#', html: 'HTML', css: 'CSS', json: 'JSON', bash: 'Bash',
   sh: 'Shell', shell: 'Shell', sql: 'SQL', jsx: 'JSX', tsx: 'TSX',
 };
-const languageAliases = { js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', py: 'python', cs: 'csharp', html: 'xml', sh: 'bash', shell: 'bash' };
+const languageAliases = {
+  js: 'javascript',
+  jsx: 'javascript',
+  ts: 'typescript',
+  tsx: 'typescript',
+  py: 'python',
+  cs: 'csharp',
+  html: 'xml',
+  sh: 'bash',
+  shell: 'bash',
+};
 
 async function copyText(text) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
   const textarea = document.createElement('textarea');
-  textarea.value = text; textarea.style.position = 'fixed'; textarea.style.opacity = '0';
-  document.body.appendChild(textarea); textarea.select(); document.execCommand('copy'); textarea.remove();
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
 }
 
 function CodeBlock({ children }) {
@@ -55,29 +70,80 @@ function CodeBlock({ children }) {
   const label = languageNames[language.toLowerCase()] || language || 'Code';
   const text = String(code.props.children || '').replace(/\n$/, '');
   const highlightLanguage = languageAliases[language.toLowerCase()] || language.toLowerCase();
-  const highlighted = highlightLanguage && hljs.getLanguage(highlightLanguage)
-    ? hljs.highlight(text, { language: highlightLanguage, ignoreIllegals: true }).value
-    : hljs.highlightAuto(text).value;
+  const highlighted =
+    highlightLanguage && hljs.getLanguage(highlightLanguage)
+      ? hljs.highlight(text, {
+          language: highlightLanguage,
+          ignoreIllegals: true,
+        }).value
+      : hljs.highlightAuto(text).value;
   const copy = async () => {
     try {
-      await copyText(text); setCopyState('copied');
+      await copyText(text);
+      setCopyState('copied');
       window.setTimeout(() => setCopyState('idle'), 1800);
     } catch (_) {
-      setCopyState('error'); window.setTimeout(() => setCopyState('idle'), 1800);
+      setCopyState('error');
+      window.setTimeout(() => setCopyState('idle'), 1800);
     }
   };
 
-  return <div className="code-block">
-    <div className="code-header"><span className="code-language"><CodeIcon size={17} />{label}</span><button className={`copy-code ${copyState}`} onClick={copy} aria-label={copyState === 'copied' ? 'Đã sao chép mã nguồn' : 'Sao chép mã nguồn'} title={copyState === 'error' ? 'Không thể sao chép' : copyState === 'copied' ? 'Đã sao chép' : 'Sao chép'}>{copyState === 'copied' ? <CheckIcon size={21} /> : <CopyIcon size={21} />}</button></div>
-    <pre><code className={code.props.className} dangerouslySetInnerHTML={{ __html: highlighted }} /></pre>
-  </div>;
+  return (
+    <div className="code-block">
+      <div className="code-header">
+        <span className="code-language">
+          <CodeIcon size={17} />
+          {label}
+        </span>
+        <button
+          className={`copy-code ${copyState}`}
+          onClick={copy}
+          aria-label={
+            copyState === 'copied'
+              ? 'Đã sao chép mã nguồn'
+              : 'Sao chép mã nguồn'
+          }
+          title={
+            copyState === 'error'
+              ? 'Không thể sao chép'
+              : copyState === 'copied'
+                ? 'Đã sao chép'
+                : 'Sao chép'
+          }
+        >
+          {copyState === 'copied' ? (
+            <CheckIcon size={21} />
+          ) : (
+            <CopyIcon size={21} />
+          )}
+        </button>
+      </div>
+      <pre>
+        <code
+          className={code.props.className}
+          dangerouslySetInnerHTML={{ __html: highlighted }}
+        />
+      </pre>
+    </div>
+  );
 }
 
 export default function MessageContent({ content }) {
-  return <div className="markdown-body">
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-      pre: CodeBlock,
-      a: ({ children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
-    }}>{content}</ReactMarkdown>
-  </div>;
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          pre: CodeBlock,
+          a: ({ children, ...props }) => (
+            <a {...props} target="_blank" rel="noreferrer">
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
 }

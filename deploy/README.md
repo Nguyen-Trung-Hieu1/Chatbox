@@ -45,3 +45,14 @@ hồi để cập nhật ứng dụng. Những script đó phục vụ lần chu
 Argo CD chưa được cài. Cấu hình này dành cho thực hành trên một máy, chưa phải
 cấu hình nhiều máy hay triển khai công khai. Các image local cần được build và
 nhập lại vào K3s khi mã ứng dụng thay đổi.
+
+## Sau khi Windows ngủ hoặc WSL bị dừng
+
+K3s trong WSL có thể giữ trạng thái container cũ sau khi máy ngủ. Nếu trang mở
+được nhưng chat báo `Failed to fetch`, hoặc localhost:8088 không mở được, chạy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File E:\Chatbox1\scripts\restart-chatbox.ps1
+```
+
+Script chỉ khởi động lại WSL khi HTTP 8088 đang lỗi, sau đó chờ tối đa 90 giây.

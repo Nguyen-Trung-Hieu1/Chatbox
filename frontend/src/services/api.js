@@ -1,20 +1,36 @@
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 export async function api(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, { ...options, credentials: 'include', headers: options.body ? { 'Content-Type': 'application/json', ...options.headers } : options.headers });
-  const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
-  if (!response.ok) { const error = new Error(data.error || 'Đã có lỗi xảy ra'); error.status = response.status; throw error; }
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    credentials: 'include',
+    headers: options.body
+      ? { 'Content-Type': 'application/json', ...options.headers }
+      : options.headers,
+  });
+  const data =
+    response.status === 204 ? {} : await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || 'Đã có lỗi xảy ra');
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
 export async function streamChat(payload, { signal, onDelta }) {
   const response = await fetch(`${API_URL}/api/chat`, {
-    method: 'POST', credentials: 'include', signal,
-    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    method: 'POST',
+    credentials: 'include',
+    signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    const error = new Error(data.error || 'Đã có lỗi xảy ra'); error.status = response.status; throw error;
+    const error = new Error(data.error || 'Đã có lỗi xảy ra');
+    error.status = response.status;
+    throw error;
   }
   if (!response.body) throw new Error('Trình duyệt không hỗ trợ streaming');
   const reader = response.body.getReader();

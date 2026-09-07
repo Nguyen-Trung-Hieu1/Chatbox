@@ -1,12 +1,15 @@
 # Chatbox backend
 
-Backend follows a layered architecture:
+Backend follows Clean Architecture. Dependencies always point inward:
 
-- `handler`: HTTP parsing and responses
-- `middleware`: session authentication
-- `service`: authentication, authorization, chat and AI-context rules
-- `repository`: MongoDB access only
-- `models`: persistence/API entities
+- `internal/domain`: entities, business errors, and ports (interfaces)
+- `internal/usecase`: application rules for authentication and chat
+- `internal/infrastructure`: MongoDB and AI implementations of domain ports
+- `internal/delivery/http`: HTTP handlers, routing, cookies, middleware and JSON
+- `internal/config`: environment configuration
+- `cmd/api`: composition root; the only place that wires concrete adapters
+
+Run the API with `go run ./cmd/api`.
 
 Copy `.env.example` values into the process environment before starting. The
 application intentionally does not load `.env` files or contain API secrets.
