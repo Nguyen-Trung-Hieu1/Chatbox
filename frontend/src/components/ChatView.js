@@ -43,7 +43,7 @@ function Composer({ input, loading, onInputChange, onSend, onStop }) {
         </div>
       </div>
       <p className="disclaimer">
-        Chatbox có thể mắc lỗi. Đây là bản thử nghiệm Docker.
+        Chatbox có thể mắc lỗi. Kiểm tra thông tin quan trọng.
       </p>
     </div>
   );
