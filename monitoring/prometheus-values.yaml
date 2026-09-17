@@ -2,6 +2,14 @@ alertmanager:
   enabled: false
 
 grafana:
+  service:
+    # Caddy on the EC2 host forwards HTTPS traffic to this K3s NodePort.
+    type: NodePort
+    nodePort: 30300
+  grafana.ini:
+    server:
+      domain: grafana.chatbox.cyou
+      root_url: https://grafana.chatbox.cyou
   admin:
     # Keep using the Secret created by the original Helm installation.
     # The password stays in Kubernetes and is never committed to Git.
