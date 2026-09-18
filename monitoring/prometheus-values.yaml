@@ -1,5 +1,53 @@
 alertmanager:
-  enabled: false
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: telegram
+      group_by:
+        - alertname
+        - namespace
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: 'null'
+          matchers:
+            - alertname = "Watchdog"
+    receivers:
+      - name: 'null'
+      - name: telegram
+        telegram_configs:
+          - bot_token_file: /etc/alertmanager/secrets/alertmanager-telegram/bot-token
+            chat_id: 7385402919
+            send_resolved: true
+            parse_mode: HTML
+            message: |-
+              <b>{{ .Status | toUpper }}</b>: {{ .CommonLabels.alertname }}
+              Namespace: {{ .CommonLabels.namespace }}
+              {{ range .Alerts }}{{ .Annotations.summary }}
+              {{ .Annotations.description }}{{ end }}
+  alertmanagerSpec:
+    secrets:
+      - alertmanager-telegram
+    replicas: 1
+    resources:
+      requests:
+        cpu: 20m
+        memory: 48Mi
+      limits:
+        cpu: 150m
+        memory: 128Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
 
 grafana:
   service:
