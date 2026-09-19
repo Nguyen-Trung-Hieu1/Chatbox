@@ -30,7 +30,7 @@ loki:
         directory: /etc/loki/rules
 
 ruler:
-  enabled: false
+  enabled: true
 
 singleBinary:
   replicas: 1
