@@ -69,11 +69,12 @@ jobs:
           sed -i "s|image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:.*|image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:${IMAGE_TAG}|" deploy/local-app.yaml
           sed -i "s|image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:.*|image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:${IMAGE_TAG}|" deploy/aws/app.yaml
           sed -i "s|image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:.*|image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:${IMAGE_TAG}|" deploy/aws/app.yaml
+          sed -i "s|image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:.*|image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:${IMAGE_TAG}|" monitoring/resources/pod-watcher.yaml
       - name: Commit the new image version
         run: |
           if git diff --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/local-app.yaml deploy/aws/app.yaml
+          git add deploy/local-app.yaml deploy/aws/app.yaml monitoring/resources/pod-watcher.yaml
           git commit -m "Deploy Chatbox1 ${GITHUB_SHA::7}"
           git push
