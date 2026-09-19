@@ -4,4 +4,3 @@ resources:
   - grafana-loki-datasource.yaml
   - chatbox-alerts.yaml
   - pod-watcher.yaml
-  - pod-watcher-failure-test.yaml
