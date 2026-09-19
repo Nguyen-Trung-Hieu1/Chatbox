@@ -4,7 +4,7 @@ alertmanager:
     global:
       resolve_timeout: 5m
     route:
-      receiver: telegram
+      receiver: 'null'
       group_by:
         - alertname
         - namespace
@@ -12,9 +12,9 @@ alertmanager:
       group_interval: 5m
       repeat_interval: 4h
       routes:
-        - receiver: 'null'
+        - receiver: telegram
           matchers:
-            - alertname = "Watchdog"
+            - alertname =~ "ChatboxDeploymentReplicasUnavailable|ChatboxContainerRestarted"
     receivers:
       - name: 'null'
       - name: telegram
