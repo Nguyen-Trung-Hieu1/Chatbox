@@ -21,4 +21,4 @@ data:
               severity: warning
             annotations:
               summary: "Pod {{ $labels.name }}: {{ $labels.reason }}"
-              description: "K3s phat Event {{ $labels.reason }} cho Pod {{ $labels.name }}. Kubernetes Events khong bao dam ghi moi lan xoa Pod."
+              description: "K3s đã ghi nhận Event {{ $labels.reason }} cho Pod {{ $labels.name }}. Kubernetes không đảm bảo tạo Event cho mọi lần xoá Pod."
