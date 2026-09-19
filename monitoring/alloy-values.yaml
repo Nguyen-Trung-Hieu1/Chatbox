@@ -56,6 +56,14 @@ alloy:
         forward_to = [loki.write.local.receiver]
       }
 
+      // Kubernetes Events are separate from container stdout/stderr logs.
+      loki.source.kubernetes_events "chatbox" {
+        namespaces = ["chatbox1"]
+        log_format = "json"
+        job_name   = "kubernetes-events"
+        forward_to = [loki.write.local.receiver]
+      }
+
       loki.write "local" {
         endpoint {
           url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"

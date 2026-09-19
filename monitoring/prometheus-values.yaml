@@ -14,7 +14,7 @@ alertmanager:
       routes:
         - receiver: telegram
           matchers:
-            - alertname =~ "ChatboxDeploymentReplicasUnavailable|ChatboxContainerRestarted"
+            - alertname =~ "ChatboxDeploymentReplicasUnavailable|ChatboxContainerRestarted|ChatboxPodKubernetesEvent"
     receivers:
       - name: 'null'
       - name: telegram

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chatbox-pod-event-rules
+  namespace: monitoring
+data:
+  chatbox-pod-events.yaml: |-
+    groups:
+      - name: chatbox.pod.events
+        interval: 10s
+        rules:
+          - alert: ChatboxPodKubernetesEvent
+            expr: |
+              sum by (name, reason) (
+                count_over_time({job="kubernetes-events", namespace="chatbox1"}
+                  | json | kind="Pod"
+                  | reason=~"Killing|BackOff|Unhealthy|FailedKillPod|Evicted" [1m])
+              ) > 0
+            labels:
+              namespace: chatbox1
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.name }}: {{ $labels.reason }}"
+              description: "K3s phat Event {{ $labels.reason }} cho Pod {{ $labels.name }}. Kubernetes Events khong bao dam ghi moi lan xoa Pod."
