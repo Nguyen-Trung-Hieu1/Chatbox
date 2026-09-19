@@ -48,7 +48,7 @@ spec:
       serviceAccountName: chatbox-pod-watcher
       containers:
         - name: watcher
-          image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:main
+          image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:sha-3066bca49083d76ad3b57d08ce81b81236b038f7
           imagePullPolicy: Always
           command: ["/app/pod-watcher"]
           env:
