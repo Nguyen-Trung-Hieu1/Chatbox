@@ -3,5 +3,4 @@ kind: Kustomization
 resources:
   - grafana-loki-datasource.yaml
   - pod-event-rules.yaml
-  - pod-event-alert-test.yaml
   - chatbox-alerts.yaml
