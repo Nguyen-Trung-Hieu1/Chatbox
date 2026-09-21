@@ -21,7 +21,7 @@ func Load(files ...string) (Config, error) {
 			return Config{}, err
 		}
 	}
-	return Config{value("MONGO_URI", "mongodb://localhost:27017"), value("MONGO_DATABASE", "Chatbox1"), value("AI_ENDPOINT", "http://localhost:20127/v1/chat/completions"), os.Getenv("AI_API_KEY"), value("AI_MODEL", "cx/gpt-5.6-terra"), value("HTTP_ADDR", ":8080"), value("CORS_ORIGIN", "http://localhost:3000"), value("SESSION_COOKIE_NAME", "chatbox_session"), strings.EqualFold(value("COOKIE_SECURE", "false"), "true"), time.Duration(integer("SESSION_TTL_HOURS", 24)) * time.Hour, integer("AI_TOKEN_BUDGET", 6000)}, nil
+	return Config{value("MONGO_URI", "mongodb://localhost:27017"), value("MONGO_DATABASE", "Chatbox1"), value("AI_ENDPOINT", "http://localhost:20127/v1/chat/completions"), os.Getenv("AI_API_KEY"), value("AI_MODEL", "ag/claude-opus-4-6-thinking"), value("HTTP_ADDR", ":8080"), value("CORS_ORIGIN", "http://localhost:3000"), value("SESSION_COOKIE_NAME", "chatbox_session"), strings.EqualFold(value("COOKIE_SECURE", "false"), "true"), time.Duration(integer("SESSION_TTL_HOURS", 24)) * time.Hour, integer("AI_TOKEN_BUDGET", 6000)}, nil
 }
 func value(k, f string) string {
 	if v := os.Getenv(k); v != "" {

@@ -26,7 +26,7 @@ subprocess.run(['k3s','kubectl','-n','chatbox1','exec','-i','deployment/mongodb'
 runtime={
  'MONGO_URI':'mongodb://chatbox_app:'+quote(password,safe='')+'@mongodb:27017/Chatbox1?authSource=Chatbox1',
  'MONGO_DATABASE':'Chatbox1','AI_ENDPOINT':'http://router:20128/v1/chat/completions',
- 'AI_API_KEY':key,'AI_MODEL':cfg.get('AI_MODEL','cx/gpt-5.6-terra'),
+ 'AI_API_KEY':key,'AI_MODEL':cfg.get('AI_MODEL','ag/claude-opus-4-6-thinking'),
  'AI_TOKEN_BUDGET':cfg.get('AI_TOKEN_BUDGET','6000'),'HTTP_ADDR':':8080',
  'CORS_ORIGIN':'http://localhost:8088','COOKIE_SECURE':'false','SESSION_COOKIE_NAME':'chatbox_k3s_session'}
 if any('\n' in v or '\r' in v for v in runtime.values()): raise RuntimeError('Invalid multiline config')
