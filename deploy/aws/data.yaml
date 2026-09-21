@@ -94,8 +94,11 @@ spec:
     spec:
       containers:
         - name: router
-          image: chatbox1-9router:local
-          imagePullPolicy: Never
+          # Official image: a fresh EC2 node can pull this itself.  The
+          # instance bootstrap restores the private 9router data directory
+          # before this Deployment is started.
+          image: decolua/9router:latest
+          imagePullPolicy: IfNotPresent
           env:
             - name: DATA_DIR
               value: /app/data
