@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "bash -lc 'set -euo pipefail; k3s kubectl create namespace argocd --dry-run=client -o yaml | k3s kubectl apply -f -; curl -fsSL https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml | k3s kubectl apply -n argocd -f -; k3s kubectl -n argocd rollout status deployment/argocd-server --timeout=10m; echo ARGOCD_READY'"
+  ]
+}

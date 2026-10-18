@@ -9,8 +9,8 @@ import (
 )
 
 type Mongo struct {
-	Client                                   *mongo.Client
-	Users, Sessions, Conversations, Messages *mongo.Collection
+	Client                                                     *mongo.Client
+	Users, Sessions, Conversations, Messages, Wallets, APIKeys *mongo.Collection
 }
 
 func NewMongo(ctx context.Context, uri, database string) (*Mongo, error) {
@@ -22,7 +22,7 @@ func NewMongo(ctx context.Context, uri, database string) (*Mongo, error) {
 		return nil, err
 	}
 	db := client.Database(database)
-	m := &Mongo{client, db.Collection("users"), db.Collection("sessions"), db.Collection("conversations"), db.Collection("messages")}
+	m := &Mongo{client, db.Collection("users"), db.Collection("sessions"), db.Collection("conversations"), db.Collection("messages"), db.Collection("wallets"), db.Collection("api_keys")}
 	if err = m.ensureIndexes(ctx); err != nil {
 		return nil, err
 	}
@@ -39,7 +39,13 @@ func (m *Mongo) ensureIndexes(ctx context.Context) error {
 	if _, err := m.Conversations.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "owner_id", Value: 1}, {Key: "updated_at", Value: -1}}}); err != nil {
 		return err
 	}
-	_, err := m.Messages.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "conversation_id", Value: 1}, {Key: "created_at", Value: 1}}})
+	if _, err := m.Messages.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "conversation_id", Value: 1}, {Key: "created_at", Value: 1}}}); err != nil {
+		return err
+	}
+	_, err := m.APIKeys.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "hash", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
+	})
 	return err
 }
 func DBContext() (context.Context, context.CancelFunc) {

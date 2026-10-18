@@ -1,0 +1,20 @@
+{
+  "commands": [
+    "set -eu",
+    "export DEBIAN_FRONTEND=noninteractive",
+    "apt-get update",
+    "apt-get install -y ca-certificates curl git openssl",
+    "curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC=\"server --write-kubeconfig-mode 644\" sh -",
+    "until k3s kubectl get nodes; do sleep 5; done",
+    "install -d -m 700 /var/lib/chatbox1-k3s/chatbox1-router-copy",
+    "k3s kubectl create namespace argocd --dry-run=client -o yaml | k3s kubectl apply -f -",
+    "k3s kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml",
+    "k3s kubectl -n argocd rollout status deployment/argocd-server --timeout=10m",
+    "k3s kubectl create namespace monitoring --dry-run=client -o yaml | k3s kubectl apply -f -",
+    "k3s kubectl -n monitoring create secret generic monitoring-grafana --from-literal=admin-user=admin --from-literal=admin-password=\"$(openssl rand -base64 24)\" --dry-run=client -o yaml | k3s kubectl apply -f -",
+    "k3s kubectl -n monitoring create secret generic alertmanager-telegram --from-literal=bot-token=disabled --dry-run=client -o yaml | k3s kubectl apply -f -",
+    "curl -fsSL https://raw.githubusercontent.com/Nguyen-Trung-Hieu1/Chatbox/main/argocd/monitoring-stack.yaml -o /tmp/monitoring-stack.yaml",
+    "k3s kubectl apply -f /tmp/monitoring-stack.yaml",
+    "echo 'K3s, Argo CD and the monitoring stack have been started.'"
+  ]
+}

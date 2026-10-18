@@ -11,4 +11,8 @@ var (
 	ErrInvalidTitle       = errors.New("tên cuộc trò chuyện phải có từ 1 đến 100 ký tự")
 	ErrNotFound           = errors.New("không tìm thấy dữ liệu")
 	ErrDuplicate          = errors.New("dữ liệu đã tồn tại")
+	ErrModelForbidden     = errors.New("gói của bạn không được dùng model này")
+	ErrQuotaExceeded      = errors.New("hạn mức còn lại không đủ cho yêu cầu này")
+	ErrInvalidContent     = errors.New("tin nhắn quá dài")
+	ErrInvalidAPIKeyName  = errors.New("tên API key phải có từ 1 đến 80 ký tự")
 )

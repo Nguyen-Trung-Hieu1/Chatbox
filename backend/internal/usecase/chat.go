@@ -13,14 +13,89 @@ import (
 const assistantSystemPrompt = `Bạn là trợ lý của Chatbox. Mặc định luôn trả lời bằng tiếng Việt tự nhiên, đầy đủ dấu và nhất quán; chỉ đổi ngôn ngữ hoặc viết không dấu khi người dùng yêu cầu rõ ràng. Trình bày bằng Markdown dễ đọc. Mọi đoạn mã nhiều dòng phải đặt trong fenced code block có ghi ngôn ngữ phù hợp.`
 
 type Chat struct {
-	conversations domain.ConversationRepository
-	messages      domain.MessageRepository
-	ai            domain.AIClient
-	tokenBudget   int
+	conversations          domain.ConversationRepository
+	messages               domain.MessageRepository
+	ai                     domain.AIClient
+	tokenBudget            int
+	billing                domain.BillingRepository
+	freeModels, paidModels []domain.ModelPolicy
+	initialCredits         int64
 }
 
-func NewChat(c domain.ConversationRepository, m domain.MessageRepository, ai domain.AIClient, budget int) *Chat {
-	return &Chat{c, m, ai, budget}
+func NewChat(c domain.ConversationRepository, m domain.MessageRepository, ai domain.AIClient, budget int, billing domain.BillingRepository, free, paid []domain.ModelPolicy, initial int64) *Chat {
+	return &Chat{conversations: c, messages: m, ai: ai, tokenBudget: budget, billing: billing, freeModels: free, paidModels: paid, initialCredits: initial}
+}
+
+func (s *Chat) Entitlement(ctx context.Context, user string) (*domain.Entitlement, error) {
+	if err := s.billing.Ensure(ctx, user, s.initialCredits); err != nil {
+		return nil, err
+	}
+	plan, err := s.billing.Plan(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	balance, err := s.billing.Balance(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	models := s.freeModels
+	if plan == "paid" {
+		models = s.paidModels
+	}
+	return &domain.Entitlement{Plan: plan, Balance: balance, Models: models}, nil
+}
+func (s *Chat) UsageHistory(ctx context.Context, user string) ([]domain.UsageRecord, error) {
+	return s.billing.History(ctx, user)
+}
+func (s *Chat) policy(ctx context.Context, user, model string) (domain.ModelPolicy, error) {
+	e, err := s.Entitlement(ctx, user)
+	if err != nil {
+		return domain.ModelPolicy{}, err
+	}
+	if model == "" && len(e.Models) > 0 {
+		model = e.Models[0].ID
+	}
+	for _, p := range e.Models {
+		if p.ID == model {
+			return p, nil
+		}
+	}
+	return domain.ModelPolicy{}, domain.ErrModelForbidden
+}
+func credits(p domain.ModelPolicy, in, out int) int64 {
+	n := int64(in)*p.InputRate + int64(out)*p.OutputRate
+	return (n + 999) / 1000
+}
+func estimatedUsage(messages []domain.AIMessage, output string) domain.AIUsage {
+	in := 0
+	for _, m := range messages {
+		in += tokens(m.Content)
+	}
+	return domain.AIUsage{InputTokens: in, OutputTokens: tokens(output)}
+}
+func (s *Chat) charge(owner string, p domain.ModelPolicy, kind string, reserve int64, result domain.AIResult, messages []domain.AIMessage, status string) error {
+	u := billableUsage(result, messages, status)
+	spent := credits(p, u.InputTokens, u.OutputTokens)
+	if spent > reserve {
+		spent = reserve
+	}
+	settleCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return s.billing.Settle(settleCtx, owner, reserve, spent, domain.UsageRecord{UserID: owner, Model: p.ID, Kind: kind, InputTokens: u.InputTokens, OutputTokens: u.OutputTokens, Reported: u.Reported, Status: status, CreatedAt: time.Now().UTC()})
+}
+
+func billableUsage(result domain.AIResult, messages []domain.AIMessage, status string) domain.AIUsage {
+	u := result.Usage
+	if status == "interrupted" && u.Reported && tokens(result.Content) > u.OutputTokens {
+		u.OutputTokens = tokens(result.Content)
+		u.Reported = false
+	}
+	if status == "failed" && result.Content == "" && !u.Reported {
+		u = domain.AIUsage{}
+	} else if !u.Reported {
+		u = estimatedUsage(messages, result.Content)
+	}
+	return u
 }
 
 func (s *Chat) CreateConversation(ctx context.Context, owner, title string) (*domain.Conversation, error) {
@@ -78,15 +153,36 @@ func (s *Chat) Delete(ctx context.Context, id, owner string) error {
 	}
 	return s.conversations.Delete(ctx, c.ID)
 }
-func (s *Chat) SendStream(ctx context.Context, id, content, owner string, emit func(string) error) (*domain.Message, error) {
+func (s *Chat) SendStream(ctx context.Context, id, content, owner, model string, emit func(string) error) (*domain.Message, error) {
 	c, err := s.owned(ctx, id, owner)
 	if err != nil {
 		return nil, err
 	}
 	content = strings.TrimSpace(content)
+	if len([]rune(content)) > 20000 {
+		return nil, domain.ErrInvalidContent
+	}
+	p, err := s.policy(ctx, owner, model)
+	if err != nil {
+		return nil, err
+	}
+	if p.MaxOutputTokens <= 0 {
+		p.MaxOutputTokens = 1024
+	}
+	contextMessages, err := s.buildContext(ctx, c, owner, p)
+	if err != nil {
+		return nil, err
+	}
+	contextMessages = append(contextMessages, domain.AIMessage{Role: "user", Content: content})
+	est := estimatedUsage(contextMessages, "")
+	reserve := credits(p, est.InputTokens*4, p.MaxOutputTokens)
+	if err = s.billing.Reserve(ctx, owner, reserve); err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	u := &domain.Message{ConversationID: c.ID, Role: "user", Content: content, CreatedAt: now}
 	if err = s.messages.Create(ctx, u); err != nil {
+		_ = s.charge(owner, p, "chat", reserve, domain.AIResult{}, nil, "failed")
 		return nil, err
 	}
 	title := ""
@@ -97,15 +193,21 @@ func (s *Chat) SendStream(ctx context.Context, id, content, owner string, emit f
 		}
 	}
 	_ = s.conversations.UpdateActivity(ctx, c.ID, title)
-	contextMessages, err := s.buildContext(ctx, c)
-	if err != nil {
-		return nil, err
+	result, streamErr := s.ai.Stream(ctx, p.ID, contextMessages, p.MaxOutputTokens, emit)
+	status := "completed"
+	if streamErr != nil {
+		status = "interrupted"
+		if result.Content == "" && !result.Usage.Reported {
+			status = "failed"
+		}
 	}
-	answer, streamErr := s.ai.Stream(ctx, contextMessages, emit)
-	if strings.TrimSpace(answer) == "" {
+	if chargeErr := s.charge(owner, p, "chat", reserve, result, contextMessages, status); chargeErr != nil {
+		return nil, chargeErr
+	}
+	if strings.TrimSpace(result.Content) == "" {
 		return nil, streamErr
 	}
-	reply := &domain.Message{ConversationID: c.ID, Role: "assistant", Content: answer, CreatedAt: time.Now().UTC()}
+	reply := &domain.Message{ConversationID: c.ID, Role: "assistant", Content: result.Content, CreatedAt: time.Now().UTC()}
 	saveCtx := ctx
 	var cancel context.CancelFunc
 	if streamErr != nil || ctx.Err() != nil {
@@ -118,7 +220,7 @@ func (s *Chat) SendStream(ctx context.Context, id, content, owner string, emit f
 	_ = s.conversations.UpdateActivity(saveCtx, c.ID, "")
 	return reply, streamErr
 }
-func (s *Chat) buildContext(ctx context.Context, c *domain.Conversation) ([]domain.AIMessage, error) {
+func (s *Chat) buildContext(ctx context.Context, c *domain.Conversation, owner string, p domain.ModelPolicy) ([]domain.AIMessage, error) {
 	msgs, err := s.messages.Unsummarized(ctx, c.ID)
 	if err != nil {
 		return nil, err
@@ -146,14 +248,24 @@ func (s *Chat) buildContext(ctx context.Context, c *domain.Conversation) ([]doma
 		}
 		old := msgs[:end]
 		prompt := []domain.AIMessage{{Role: "system", Content: "Tóm tắt ngắn gọn hội thoại, giữ lại sự kiện, yêu cầu và quyết định quan trọng."}, {Role: "user", Content: "Tóm tắt hiện tại:\n" + c.Summary + "\n\nCác tin nhắn mới cần gộp:\n" + format(old)}}
-		if summary, e := s.ai.Complete(ctx, prompt); e == nil {
-			ids := make([]string, len(old))
-			for i, m := range old {
-				ids[i] = m.ID
-			}
-			if e = s.conversations.UpdateSummary(ctx, c.ID, summary); e == nil {
-				_ = s.messages.MarkSummarized(ctx, ids)
-				c.Summary = summary
+		summaryReserve := credits(p, estimatedUsage(prompt, "").InputTokens*4, p.MaxOutputTokens)
+		if e := s.billing.Reserve(ctx, owner, summaryReserve); e == nil {
+			if summary, e := s.ai.Complete(ctx, p.ID, prompt, p.MaxOutputTokens); e == nil {
+				if chargeErr := s.charge(owner, p, "summary", summaryReserve, summary, prompt, "completed"); chargeErr != nil {
+					return nil, chargeErr
+				}
+				ids := make([]string, len(old))
+				for i, m := range old {
+					ids[i] = m.ID
+				}
+				if e = s.conversations.UpdateSummary(ctx, c.ID, summary.Content); e == nil {
+					_ = s.messages.MarkSummarized(ctx, ids)
+					c.Summary = summary.Content
+				}
+			} else {
+				if chargeErr := s.charge(owner, p, "summary", summaryReserve, summary, prompt, "failed"); chargeErr != nil {
+					return nil, chargeErr
+				}
 			}
 		}
 	}

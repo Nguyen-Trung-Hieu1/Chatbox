@@ -24,17 +24,27 @@ type ChatUseCase interface {
 	History(context.Context, string, string) ([]domain.Message, error)
 	Rename(context.Context, string, string, string) (*domain.Conversation, error)
 	Delete(context.Context, string, string) error
-	SendStream(context.Context, string, string, string, func(string) error) (*domain.Message, error)
+	SendStream(context.Context, string, string, string, string, func(string) error) (*domain.Message, error)
+	Entitlement(context.Context, string) (*domain.Entitlement, error)
+	UsageHistory(context.Context, string) ([]domain.UsageRecord, error)
+	APIGenerate(context.Context, string, string, []domain.AIMessage, int, bool, func(string) error) (domain.AIResult, error)
+}
+type APIKeyUseCase interface {
+	Create(context.Context, string, string) (*domain.APIKey, string, error)
+	List(context.Context, string) ([]domain.APIKey, error)
+	Revoke(context.Context, string, string) error
+	Authenticate(context.Context, string) (*domain.User, error)
 }
 type Server struct {
 	auth   AuthUseCase
 	chat   ChatUseCase
+	keys   APIKeyUseCase
 	cookie string
 	secure bool
 }
 
-func New(auth *usecase.Auth, chat *usecase.Chat, cookie string, secure bool) *Server {
-	return &Server{auth, chat, cookie, secure}
+func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, cookie string, secure bool) *Server {
+	return &Server{auth: auth, chat: chat, keys: keys, cookie: cookie, secure: secure}
 }
 
 type contextKey int
@@ -56,6 +66,12 @@ func fail(w http.ResponseWriter, e error) {
 		status = 401
 	case errors.Is(e, domain.ErrForbidden):
 		status = 403
+	case errors.Is(e, domain.ErrModelForbidden):
+		status = 403
+	case errors.Is(e, domain.ErrQuotaExceeded):
+		status = 402
+	case errors.Is(e, domain.ErrInvalidContent), errors.Is(e, domain.ErrInvalidAPIKeyName):
+		status = 400
 	}
 	jsonOut(w, status, map[string]string{"error": e.Error()})
 }
@@ -95,13 +111,19 @@ func (s *Server) Handler(origin string) http.Handler {
 	mux.Handle("/api/conversations", s.authn(http.HandlerFunc(s.conversations)))
 	mux.Handle("/api/history", s.authn(method("GET", s.history)))
 	mux.Handle("/api/chat", s.authn(method("POST", s.send)))
+	mux.Handle("/api/entitlement", s.authn(method("GET", s.entitlement)))
+	mux.Handle("/api/usage", s.authn(method("GET", s.usage)))
+	mux.Handle("/api/keys", s.authn(http.HandlerFunc(s.manageKeys)))
+	mux.Handle("/v1/models", s.apiAuth(method("GET", s.openAIModels)))
+	mux.Handle("/v1/chat/completions", s.apiAuth(method("POST", s.openAIChat)))
+	mux.Handle("/v1/completions", s.apiAuth(method("POST", s.openAICompletions)))
 	return requestLogging(cors(origin, mux))
 }
 func cors(origin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Add("Vary", "Origin")
 		if r.Method == "OPTIONS" {
@@ -160,6 +182,25 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	u := user(r.Context())
 	jsonOut(w, 200, map[string]string{"id": u.ID, "username": u.Username})
+}
+func (s *Server) entitlement(w http.ResponseWriter, r *http.Request) {
+	e, err := s.chat.Entitlement(r.Context(), user(r.Context()).ID)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	jsonOut(w, 200, e)
+}
+func (s *Server) usage(w http.ResponseWriter, r *http.Request) {
+	h, err := s.chat.UsageHistory(r.Context(), user(r.Context()).ID)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if h == nil {
+		h = []domain.UsageRecord{}
+	}
+	jsonOut(w, 200, h)
 }
 func (s *Server) conversations(w http.ResponseWriter, r *http.Request) {
 	u := user(r.Context())
@@ -231,6 +272,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		ConversationID string `json:"conversation_id"`
 		Content        string `json:"content"`
+		Model          string `json:"model"`
 	}
 	if decode(r, &in) != nil || strings.TrimSpace(in.Content) == "" {
 		logEvent(r, "warn", "chat_failed", map[string]any{"reason": "invalid_input"})
@@ -253,7 +295,7 @@ func (s *Server) send(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 		return nil
 	}
-	reply, e := s.chat.SendStream(r.Context(), in.ConversationID, in.Content, user(r.Context()).ID, emit)
+	reply, e := s.chat.SendStream(r.Context(), in.ConversationID, in.Content, user(r.Context()).ID, in.Model, emit)
 	if e != nil {
 		logEvent(r, "error", "chat_failed", map[string]any{"reason": errorCode(e), "conversation_id": in.ConversationID})
 		if r.Context().Err() == nil {
@@ -277,6 +319,10 @@ func errorCode(e error) string {
 		return "unauthorized"
 	case errors.Is(e, domain.ErrForbidden):
 		return "forbidden"
+	case errors.Is(e, domain.ErrModelForbidden):
+		return "model_forbidden"
+	case errors.Is(e, domain.ErrQuotaExceeded):
+		return "quota_exceeded"
 	case errors.Is(e, domain.ErrInvalidID):
 		return "invalid_id"
 	case errors.Is(e, domain.ErrInvalidTitle):

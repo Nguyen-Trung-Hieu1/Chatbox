@@ -18,20 +18,39 @@ type Client struct {
 	http                 *http.Client
 }
 type request struct {
-	Stream   bool               `json:"stream"`
-	Model    string             `json:"model"`
-	Messages []domain.AIMessage `json:"messages"`
+	Stream              bool               `json:"stream"`
+	Model               string             `json:"model"`
+	Messages            []domain.AIMessage `json:"messages"`
+	MaxCompletionTokens int                `json:"max_completion_tokens"`
+	StreamOptions       *struct {
+		IncludeUsage bool `json:"include_usage"`
+	} `json:"stream_options,omitempty"`
 }
 type response struct {
 	Choices []struct {
 		Message domain.AIMessage `json:"message"`
 		Delta   domain.AIMessage `json:"delta"`
 	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		InputTokens      int `json:"input_tokens"`
+		OutputTokens     int `json:"output_tokens"`
+	} `json:"usage"`
 }
 
 func New(endpoint, key, model string) *Client { return &Client{endpoint, key, model, &http.Client{}} }
-func (s *Client) newRequest(ctx context.Context, stream bool, messages []domain.AIMessage) (*http.Request, error) {
-	body, e := json.Marshal(request{stream, s.model, messages})
+func (s *Client) newRequest(ctx context.Context, stream bool, model string, messages []domain.AIMessage, maxOutput int) (*http.Request, error) {
+	if model == "" {
+		model = s.model
+	}
+	r := request{Stream: stream, Model: model, Messages: messages, MaxCompletionTokens: maxOutput}
+	if stream {
+		r.StreamOptions = &struct {
+			IncludeUsage bool `json:"include_usage"`
+		}{true}
+	}
+	body, e := json.Marshal(r)
 	if e != nil {
 		return nil, e
 	}
@@ -45,44 +64,58 @@ func (s *Client) newRequest(ctx context.Context, stream bool, messages []domain.
 	}
 	return req, nil
 }
-func (s *Client) Complete(ctx context.Context, messages []domain.AIMessage) (string, error) {
-	req, e := s.newRequest(ctx, false, messages)
+func usage(v *response) domain.AIUsage {
+	if v.Usage == nil {
+		return domain.AIUsage{}
+	}
+	in, out := v.Usage.PromptTokens, v.Usage.CompletionTokens
+	if in == 0 {
+		in = v.Usage.InputTokens
+	}
+	if out == 0 {
+		out = v.Usage.OutputTokens
+	}
+	return domain.AIUsage{InputTokens: in, OutputTokens: out, Reported: in > 0 || out > 0}
+}
+func (s *Client) Complete(ctx context.Context, model string, messages []domain.AIMessage, maxOutput int) (domain.AIResult, error) {
+	req, e := s.newRequest(ctx, false, model, messages, maxOutput)
 	if e != nil {
-		return "", e
+		return domain.AIResult{}, e
 	}
 	resp, e := s.http.Do(req)
 	if e != nil {
-		return "", e
+		return domain.AIResult{}, e
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return "", fmt.Errorf("AI trả về %s: %s", resp.Status, strings.TrimSpace(string(b)))
+		return domain.AIResult{}, fmt.Errorf("AI trả về %s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	var out response
 	if e = json.NewDecoder(resp.Body).Decode(&out); e != nil {
-		return "", e
+		return domain.AIResult{}, e
 	}
 	if len(out.Choices) == 0 || strings.TrimSpace(out.Choices[0].Message.Content) == "" {
-		return "", errors.New("AI không trả về nội dung")
+		return domain.AIResult{}, errors.New("AI không trả về nội dung")
 	}
-	return out.Choices[0].Message.Content, nil
+	return domain.AIResult{Content: out.Choices[0].Message.Content, Usage: usage(&out)}, nil
 }
-func (s *Client) Stream(ctx context.Context, messages []domain.AIMessage, emit func(string) error) (string, error) {
-	req, e := s.newRequest(ctx, true, messages)
+func (s *Client) Stream(ctx context.Context, model string, messages []domain.AIMessage, maxOutput int, emit func(string) error) (domain.AIResult, error) {
+	req, e := s.newRequest(ctx, true, model, messages, maxOutput)
 	if e != nil {
-		return "", e
+		return domain.AIResult{}, e
 	}
 	resp, e := s.http.Do(req)
 	if e != nil {
-		return "", e
+		return domain.AIResult{}, e
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return "", fmt.Errorf("AI trả về %s: %s", resp.Status, strings.TrimSpace(string(b)))
+		return domain.AIResult{}, fmt.Errorf("AI trả về %s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	var answer strings.Builder
+	var measured domain.AIUsage
 	scan := bufio.NewScanner(resp.Body)
 	scan.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scan.Scan() {
@@ -96,7 +129,10 @@ func (s *Client) Stream(ctx context.Context, messages []domain.AIMessage, emit f
 		}
 		var chunk response
 		if e = json.Unmarshal([]byte(data), &chunk); e != nil {
-			return answer.String(), fmt.Errorf("dữ liệu stream AI không hợp lệ: %w", e)
+			return domain.AIResult{Content: answer.String(), Usage: measured}, fmt.Errorf("dữ liệu stream AI không hợp lệ: %w", e)
+		}
+		if u := usage(&chunk); u.Reported {
+			measured = u
 		}
 		if len(chunk.Choices) == 0 {
 			continue
@@ -105,15 +141,15 @@ func (s *Client) Stream(ctx context.Context, messages []domain.AIMessage, emit f
 		if delta != "" {
 			answer.WriteString(delta)
 			if e = emit(delta); e != nil {
-				return answer.String(), e
+				return domain.AIResult{Content: answer.String(), Usage: measured}, e
 			}
 		}
 	}
 	if e = scan.Err(); e != nil {
-		return answer.String(), e
+		return domain.AIResult{Content: answer.String(), Usage: measured}, e
 	}
 	if strings.TrimSpace(answer.String()) == "" {
-		return "", errors.New("AI không trả về nội dung")
+		return domain.AIResult{Usage: measured}, errors.New("AI không trả về nội dung")
 	}
-	return answer.String(), nil
+	return domain.AIResult{Content: answer.String(), Usage: measured}, nil
 }

@@ -3,6 +3,7 @@ import Auth from './Auth';
 import ChatHeader from './components/ChatHeader';
 import ChatView from './components/ChatView';
 import Sidebar from './components/Sidebar';
+import APIKeysPanel from './components/APIKeysPanel';
 import { api, streamChat } from './services/api';
 import './App.css';
 
@@ -15,6 +16,9 @@ function App() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [entitlement, setEntitlement] = useState(null);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [showAPIKeys, setShowAPIKeys] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
   const streamController = useRef(null);
 
@@ -25,6 +29,8 @@ function App() {
     setConversations([]);
     setCurrentId('');
     setMessages([]);
+    setEntitlement(null);
+    setShowAPIKeys(false);
   };
   const handleApiError = (err) => {
     if (err.status === 401) resetToLogin();
@@ -37,19 +43,26 @@ function App() {
       handleApiError(err);
     }
   };
+  const fetchEntitlement = async () => {
+    try {
+      const next = await api('/api/entitlement');
+      setEntitlement(next);
+      setSelectedModel((current) => next.models.some((item) => item.id === current) ? current : next.models[0]?.id || '');
+    } catch (err) { handleApiError(err); }
+  };
 
   // Check the existing cookie-backed session once when the app starts.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     api('/api/me')
       .then(setCurrentUser)
       .catch(resetToLogin)
       .finally(() => setCheckingSession(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Conversations refresh only when the authenticated user changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (currentUser) fetchConversations();
+    if (currentUser) { fetchConversations(); fetchEntitlement(); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
   const handleLogout = async () => {
@@ -129,7 +142,7 @@ function App() {
         setCurrentId(conversationId);
       }
       const reply = await streamChat(
-        { conversation_id: conversationId, content },
+        { conversation_id: conversationId, content, model: selectedModel },
         {
           signal: controller.signal,
           onDelta: (delta) => {
@@ -167,6 +180,7 @@ function App() {
       if (streamController.current === controller) streamController.current = null;
       setLoading(false);
       await fetchConversations();
+      await fetchEntitlement();
     }
   };
 
@@ -188,6 +202,9 @@ function App() {
         conversations={conversations}
         currentId={currentId}
         currentUser={currentUser}
+        plan={entitlement?.plan}
+        creditBalance={entitlement?.balance}
+        onManageKeys={() => setShowAPIKeys(true)}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onDelete={deleteConversation}
@@ -210,11 +227,15 @@ function App() {
           input={input}
           loading={loading}
           messages={messages}
+          models={entitlement?.models || []}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
           onInputChange={setInput}
           onSend={sendMessage}
           onStop={stopGenerating}
         />
       </main>
+      {showAPIKeys && <APIKeysPanel models={entitlement?.models || []} onClose={() => setShowAPIKeys(false)} />}
     </div>
   );
 }

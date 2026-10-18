@@ -6,6 +6,9 @@ export default function Sidebar({
   conversations,
   currentId,
   currentUser,
+  plan,
+  creditBalance,
+  onManageKeys,
   isOpen,
   onClose,
   onDelete,
@@ -101,6 +104,10 @@ export default function Sidebar({
           <button onClick={onNewChat}>
             <ComposeIcon size={18} />
             <span>Đoạn chat mới</span>
+          </button>
+          <button onClick={onManageKeys}>
+            <span aria-hidden="true">⌘</span>
+            <span>API keys</span>
           </button>
         </nav>
         <div className="conversation-search">
@@ -205,7 +212,17 @@ export default function Sidebar({
             <span className="avatar">
               {currentUser.username.charAt(0).toUpperCase()}
             </span>
-            <span className="account-name">{currentUser.username}</span>
+            <span className="account-info">
+              <span className="account-name">{currentUser.username}</span>
+              {plan && (
+                <span className="account-plan">
+                  {plan === 'paid' ? 'Paid' : 'Free'}
+                  {Number.isFinite(creditBalance) && (
+                    <> · {new Intl.NumberFormat('vi-VN').format(creditBalance)} credit còn lại</>
+                  )}
+                </span>
+              )}
+            </span>
             <button className="logout-button" onClick={onLogout}>
               Logout
             </button>

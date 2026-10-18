@@ -31,3 +31,9 @@ test('opens conversation actions and asks before deleting', () => {
   expect(props.onDelete).not.toHaveBeenCalled();
   confirm.mockRestore();
 });
+
+test('shows the account plan below the username', () => {
+  renderSidebar({ plan: 'paid', creditBalance: 9750 });
+  expect(screen.getByText('tester')).toBeInTheDocument();
+  expect(screen.getByText('Paid · 9.750 credit còn lại')).toBeInTheDocument();
+});

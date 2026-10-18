@@ -1,0 +1,9 @@
+{
+  "commands": [
+    "k3s kubectl get nodes -o wide || true",
+    "k3s kubectl get namespace argocd || true",
+    "k3s kubectl get pods -n argocd -o wide || true",
+    "k3s kubectl get crd applications.argoproj.io -o name || true",
+    "k3s kubectl get events -n argocd --sort-by=.lastTimestamp | tail -n 20 || true"
+  ]
+}

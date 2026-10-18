@@ -33,6 +33,23 @@ type MessageRepository interface {
 }
 
 type AIClient interface {
-	Complete(context.Context, []AIMessage) (string, error)
-	Stream(context.Context, []AIMessage, func(string) error) (string, error)
+	Complete(context.Context, string, []AIMessage, int) (AIResult, error)
+	Stream(context.Context, string, []AIMessage, int, func(string) error) (AIResult, error)
+}
+
+type BillingRepository interface {
+	Ensure(context.Context, string, int64) error
+	Balance(context.Context, string) (int64, error)
+	Plan(context.Context, string) (string, error)
+	Reserve(context.Context, string, int64) error
+	Settle(context.Context, string, int64, int64, UsageRecord) error
+	History(context.Context, string) ([]UsageRecord, error)
+}
+
+type APIKeyRepository interface {
+	Create(context.Context, *APIKey) error
+	List(context.Context, string) ([]APIKey, error)
+	ActiveByHash(context.Context, string) (*APIKey, error)
+	Revoke(context.Context, string, string) error
+	Touch(context.Context, string) error
 }

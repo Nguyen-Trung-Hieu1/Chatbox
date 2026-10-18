@@ -1,5 +1,7 @@
 # Go cache and build artifacts
 .gocache/
+.tmp-go-cache/
+.tmp-npm-cache/
 *.exe
 *.test
 coverage.out
@@ -24,3 +26,13 @@ Thumbs.db
 
 # Local migration backups (contain private application data)
 .migration-private/
+
+# Terraform local state, plans and private inputs
+**/.terraform/
+**/terraform.tfstate
+**/terraform.tfstate.*
+**/*.tfplan
+**/*.tfvars
+**/*.tfvars.json
+!**/*.tfvars.example
+**/backend.hcl
