@@ -35,5 +35,23 @@ test('opens conversation actions and asks before deleting', () => {
 test('shows the account plan below the username', () => {
   renderSidebar({ plan: 'paid', creditBalance: 9750 });
   expect(screen.getByText('tester')).toBeInTheDocument();
-  expect(screen.getByText('Paid · 9.750 credit còn lại')).toBeInTheDocument();
+  expect(screen.getByText('Paid')).toBeInTheDocument();
+  expect(screen.queryByText('9.750')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('Xem chi tiết gói'));
+  expect(screen.getByText('9.750')).toBeInTheDocument();
+});
+
+test('shows the upgrade button for free accounts', () => {
+  const { props } = renderSidebar({ plan: 'free', onUpgrade: jest.fn() });
+  fireEvent.click(screen.getByText('Xem chi tiết gói'));
+  fireEvent.click(screen.getByText('Nâng gói Paid (2 ngày)'));
+  expect(props.onUpgrade).toHaveBeenCalledTimes(1);
+});
+
+test('shows remaining time for paid accounts', () => {
+  renderSidebar({ plan: 'paid', paidUntil: '2026-10-21T00:00:00Z', now: Date.parse('2026-10-20T00:00:00Z') });
+  expect(screen.queryByText('1 ngày 0 giờ 0 phút')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('Xem chi tiết gói'));
+  expect(screen.getByText('1 ngày 0 giờ 0 phút')).toBeInTheDocument();
+  expect(screen.queryByText('Nâng gói Paid (2 ngày)')).not.toBeInTheDocument();
 });

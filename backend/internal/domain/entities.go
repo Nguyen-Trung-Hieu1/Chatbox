@@ -57,9 +57,10 @@ type ModelPolicy struct {
 }
 
 type Entitlement struct {
-	Plan    string        `json:"plan"`
-	Balance int64         `json:"balance"`
-	Models  []ModelPolicy `json:"models"`
+	Plan      string        `json:"plan"`
+	PaidUntil *time.Time    `json:"paid_until,omitempty"`
+	Balance   int64         `json:"balance"`
+	Models    []ModelPolicy `json:"models"`
 }
 
 type UsageRecord struct {

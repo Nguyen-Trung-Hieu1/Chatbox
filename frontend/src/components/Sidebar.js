@@ -8,6 +8,10 @@ export default function Sidebar({
   currentUser,
   plan,
   creditBalance,
+  paidUntil,
+  now = Date.now(),
+  upgrading = false,
+  onUpgrade,
   onManageKeys,
   isOpen,
   onClose,
@@ -22,6 +26,7 @@ export default function Sidebar({
   const [editingId, setEditingId] = useState('');
   const [draftTitle, setDraftTitle] = useState('');
   const [actionError, setActionError] = useState('');
+  const [showAccountDetails, setShowAccountDetails] = useState(false);
   const menuRef = useRef(null);
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('vi');
@@ -217,9 +222,6 @@ export default function Sidebar({
               {plan && (
                 <span className="account-plan">
                   {plan === 'paid' ? 'Paid' : 'Free'}
-                  {Number.isFinite(creditBalance) && (
-                    <> · {new Intl.NumberFormat('vi-VN').format(creditBalance)} credit còn lại</>
-                  )}
                 </span>
               )}
             </span>
@@ -227,8 +229,24 @@ export default function Sidebar({
               Logout
             </button>
           </div>
+          <button type="button" className="account-details-toggle" aria-expanded={showAccountDetails} onClick={() => setShowAccountDetails((current) => !current)}>
+            <span>{showAccountDetails ? 'Ẩn chi tiết gói' : 'Xem chi tiết gói'}</span><span aria-hidden="true">{showAccountDetails ? '⌃' : '⌄'}</span>
+          </button>
+          {showAccountDetails && <div className="account-details">
+            <div><span>Credit còn lại</span><strong>{Number.isFinite(creditBalance) ? new Intl.NumberFormat('vi-VN').format(creditBalance) : '—'}</strong></div>
+            {plan === 'paid' && paidUntil && <div><span>Thời gian còn lại</span><strong>{formatRemaining(Date.parse(paidUntil) - now)}</strong></div>}
+            {plan === 'free' && <button className="upgrade-button" onClick={onUpgrade} disabled={upgrading}>{upgrading ? 'Đang nâng gói…' : 'Nâng gói Paid (2 ngày)'}</button>}
+          </div>}
         </div>
       </aside>
     </>
   );
+}
+
+function formatRemaining(ms) {
+  const minutes = Math.max(0, Math.ceil(ms / 60000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+  return `${days} ngày ${hours} giờ ${mins} phút`;
 }

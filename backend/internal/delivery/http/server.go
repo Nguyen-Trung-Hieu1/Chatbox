@@ -26,6 +26,7 @@ type ChatUseCase interface {
 	Delete(context.Context, string, string) error
 	SendStream(context.Context, string, string, string, string, func(string) error) (*domain.Message, error)
 	Entitlement(context.Context, string) (*domain.Entitlement, error)
+	Upgrade(context.Context, string) (*domain.Entitlement, error)
 	UsageHistory(context.Context, string) ([]domain.UsageRecord, error)
 	APIGenerate(context.Context, string, string, []domain.AIMessage, int, bool, func(string) error) (domain.AIResult, error)
 }
@@ -112,6 +113,7 @@ func (s *Server) Handler(origin string) http.Handler {
 	mux.Handle("/api/history", s.authn(method("GET", s.history)))
 	mux.Handle("/api/chat", s.authn(method("POST", s.send)))
 	mux.Handle("/api/entitlement", s.authn(method("GET", s.entitlement)))
+	mux.Handle("/api/upgrade", s.authn(method("POST", s.upgrade)))
 	mux.Handle("/api/usage", s.authn(method("GET", s.usage)))
 	mux.Handle("/api/keys", s.authn(http.HandlerFunc(s.manageKeys)))
 	mux.Handle("/v1/models", s.apiAuth(method("GET", s.openAIModels)))
@@ -185,6 +187,14 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) entitlement(w http.ResponseWriter, r *http.Request) {
 	e, err := s.chat.Entitlement(r.Context(), user(r.Context()).ID)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	jsonOut(w, 200, e)
+}
+func (s *Server) upgrade(w http.ResponseWriter, r *http.Request) {
+	e, err := s.chat.Upgrade(r.Context(), user(r.Context()).ID)
 	if err != nil {
 		fail(w, err)
 		return

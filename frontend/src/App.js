@@ -17,6 +17,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [entitlement, setEntitlement] = useState(null);
+  const [upgrading, setUpgrading] = useState(false);
+  const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
+  const [now, setNow] = useState(Date.now());
   const [selectedModel, setSelectedModel] = useState('');
   const [showAPIKeys, setShowAPIKeys] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
@@ -31,6 +34,7 @@ function App() {
     setMessages([]);
     setEntitlement(null);
     setShowAPIKeys(false);
+    setShowUpgradeConfirm(false);
   };
   const handleApiError = (err) => {
     if (err.status === 401) resetToLogin();
@@ -64,6 +68,34 @@ function App() {
     if (currentUser) { fetchConversations(); fetchEntitlement(); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
+  useEffect(() => {
+    if (!currentUser) return undefined;
+    const timer = setInterval(() => {
+      setNow(Date.now());
+      if (entitlement?.paid_until && Date.now() >= Date.parse(entitlement.paid_until)) fetchEntitlement();
+    }, 30000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, entitlement?.paid_until]);
+  useEffect(() => {
+    if (!showUpgradeConfirm) return undefined;
+    const onEscape = (event) => { if (event.key === 'Escape' && !upgrading) setShowUpgradeConfirm(false); };
+    document.addEventListener('keydown', onEscape);
+    return () => document.removeEventListener('keydown', onEscape);
+  }, [showUpgradeConfirm, upgrading]);
+
+  const upgradePlan = async () => {
+    setUpgrading(true);
+    setError('');
+    try {
+      const next = await api('/api/upgrade', { method: 'POST' });
+      setEntitlement(next);
+      setSelectedModel((current) => next.models.some((item) => item.id === current) ? current : next.models[0]?.id || '');
+      setNow(Date.now());
+      setShowUpgradeConfirm(false);
+    } catch (err) { setShowUpgradeConfirm(false); handleApiError(err); }
+    finally { setUpgrading(false); }
+  };
 
   const handleLogout = async () => {
     try {
@@ -204,6 +236,10 @@ function App() {
         currentUser={currentUser}
         plan={entitlement?.plan}
         creditBalance={entitlement?.balance}
+        paidUntil={entitlement?.paid_until}
+        now={now}
+        upgrading={upgrading}
+        onUpgrade={() => setShowUpgradeConfirm(true)}
         onManageKeys={() => setShowAPIKeys(true)}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -236,6 +272,18 @@ function App() {
         />
       </main>
       {showAPIKeys && <APIKeysPanel models={entitlement?.models || []} onClose={() => setShowAPIKeys(false)} />}
+      {showUpgradeConfirm && <div className="upgrade-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !upgrading) setShowUpgradeConfirm(false); }}>
+        <section className="upgrade-dialog" role="dialog" aria-modal="true" aria-labelledby="upgrade-title">
+          <div className="upgrade-dialog-icon" aria-hidden="true">✦</div>
+          <h2 id="upgrade-title">Nâng lên gói Paid?</h2>
+          <p>Bạn sẽ dùng các model của gói Paid trong <strong>2 ngày</strong>. Hết thời gian, tài khoản tự trở về gói Free.</p>
+          <p className="upgrade-dialog-note">Số credit hiện có không thay đổi khi nâng gói.</p>
+          <div className="upgrade-dialog-actions">
+            <button type="button" className="upgrade-cancel" onClick={() => setShowUpgradeConfirm(false)} disabled={upgrading} autoFocus>Để sau</button>
+            <button type="button" className="upgrade-confirm" onClick={upgradePlan} disabled={upgrading}>{upgrading ? 'Đang nâng gói…' : 'Xác nhận nâng gói'}</button>
+          </div>
+        </section>
+      </div>}
     </div>
   );
 }

@@ -30,7 +30,7 @@ func (s *Chat) Entitlement(ctx context.Context, user string) (*domain.Entitlemen
 	if err := s.billing.Ensure(ctx, user, s.initialCredits); err != nil {
 		return nil, err
 	}
-	plan, err := s.billing.Plan(ctx, user)
+	plan, paidUntil, err := s.billing.Plan(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -39,10 +39,22 @@ func (s *Chat) Entitlement(ctx context.Context, user string) (*domain.Entitlemen
 		return nil, err
 	}
 	models := s.freeModels
-	if plan == "paid" {
+	if plan == "paid" && paidUntil != nil && time.Now().Before(*paidUntil) {
 		models = s.paidModels
+	} else {
+		plan, paidUntil = "free", nil
 	}
-	return &domain.Entitlement{Plan: plan, Balance: balance, Models: models}, nil
+	return &domain.Entitlement{Plan: plan, PaidUntil: paidUntil, Balance: balance, Models: models}, nil
+}
+func (s *Chat) Upgrade(ctx context.Context, user string) (*domain.Entitlement, error) {
+	if err := s.billing.Ensure(ctx, user, s.initialCredits); err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	if err := s.billing.ActivatePaid(ctx, user, now, now.Add(48*time.Hour)); err != nil {
+		return nil, err
+	}
+	return s.Entitlement(ctx, user)
 }
 func (s *Chat) UsageHistory(ctx context.Context, user string) ([]domain.UsageRecord, error) {
 	return s.billing.History(ctx, user)

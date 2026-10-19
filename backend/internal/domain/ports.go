@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type UserRepository interface {
 	Create(context.Context, *User) error
@@ -40,7 +43,8 @@ type AIClient interface {
 type BillingRepository interface {
 	Ensure(context.Context, string, int64) error
 	Balance(context.Context, string) (int64, error)
-	Plan(context.Context, string) (string, error)
+	Plan(context.Context, string) (string, *time.Time, error)
+	ActivatePaid(context.Context, string, time.Time, time.Time) error
 	Reserve(context.Context, string, int64) error
 	Settle(context.Context, string, int64, int64, UsageRecord) error
 	History(context.Context, string) ([]UsageRecord, error)

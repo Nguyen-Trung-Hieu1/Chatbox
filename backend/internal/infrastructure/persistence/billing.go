@@ -6,6 +6,7 @@ import (
 	"errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"time"
 )
 
 type BillingRepository struct{ db *Mongo }
@@ -31,16 +32,48 @@ func (r *BillingRepository) Balance(ctx context.Context, user string) (int64, er
 	err = r.db.Wallets.FindOne(ctx, bson.M{"_id": id}).Decode(&d)
 	return d.Balance, mapErr(err)
 }
-func (r *BillingRepository) Plan(ctx context.Context, user string) (string, error) {
+func (r *BillingRepository) Plan(ctx context.Context, user string) (string, *time.Time, error) {
 	id, err := oid(user)
 	if err != nil {
-		return "", err
+		return "", nil, err
+	}
+	_, err = r.db.Wallets.UpdateOne(ctx,
+		bson.M{"_id": id, "plan": "paid", "$or": bson.A{
+			bson.M{"paid_until": bson.M{"$lte": time.Now().UTC()}},
+			bson.M{"paid_until": bson.M{"$exists": false}},
+		}},
+		bson.M{"$set": bson.M{"plan": "free"}, "$unset": bson.M{"paid_until": ""}},
+	)
+	if err != nil {
+		return "", nil, err
 	}
 	var d struct {
-		Plan string `bson:"plan"`
+		Plan      string     `bson:"plan"`
+		PaidUntil *time.Time `bson:"paid_until"`
 	}
 	err = r.db.Wallets.FindOne(ctx, bson.M{"_id": id}).Decode(&d)
-	return d.Plan, mapErr(err)
+	return d.Plan, d.PaidUntil, mapErr(err)
+}
+func (r *BillingRepository) ActivatePaid(ctx context.Context, user string, now, until time.Time) error {
+	id, err := oid(user)
+	if err != nil {
+		return err
+	}
+	result, err := r.db.Wallets.UpdateOne(ctx,
+		bson.M{"_id": id, "$or": bson.A{
+			bson.M{"plan": bson.M{"$ne": "paid"}},
+			bson.M{"paid_until": bson.M{"$lte": now}},
+			bson.M{"paid_until": bson.M{"$exists": false}},
+		}},
+		bson.M{"$set": bson.M{"plan": "paid", "paid_until": until}},
+	)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return domain.ErrForbidden
+	}
+	return nil
 }
 func (r *BillingRepository) Reserve(ctx context.Context, user string, amount int64) error {
 	if amount < 0 {
