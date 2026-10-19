@@ -9,7 +9,7 @@ func TestDefaultModelCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.FreeModels) != 4 || len(c.PaidModels) != 7 {
+	if len(c.FreeModels) != 4 || len(c.PaidModels) != 9 {
 		t.Fatalf("free=%d paid=%d", len(c.FreeModels), len(c.PaidModels))
 	}
 	count := 0
@@ -23,5 +23,21 @@ func TestDefaultModelCatalog(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("gpt-oss model count = %d", count)
+	}
+	for _, id := range []string{"cx/gpt-5.6-terra", "cx/gpt-5.6-luna"} {
+		found := false
+		for _, m := range c.PaidModels {
+			if m.ID == id {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("paid model missing: %s", id)
+		}
+		for _, m := range c.FreeModels {
+			if m.ID == id {
+				t.Fatalf("paid model in free catalog: %s", id)
+			}
+		}
 	}
 }

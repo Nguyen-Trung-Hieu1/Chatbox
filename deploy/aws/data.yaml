@@ -10,6 +10,9 @@ kind: PersistentVolumeClaim
 metadata:
   name: mongodb-data
   namespace: chatbox1
+  annotations:
+    # Keep the claim when an Argo CD sync temporarily omits this manifest.
+    argocd.argoproj.io/sync-options: Prune=false
 spec:
   accessModes:
     - ReadWriteOnce

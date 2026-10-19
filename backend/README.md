@@ -43,7 +43,7 @@ credits before calling 9Router. It then settles the reservation using reported
 usage when available, or an explicitly marked estimate. Failed calls with no
 content or usage are refunded. Credits are internal units, not a monetary price.
 
-The built-in catalog offers four models to Free accounts and seven to Paid
+The built-in catalog offers four models to Free accounts and nine to Paid
 accounts. `AI_FREE_MODELS_JSON` and `AI_PAID_MODELS_JSON` can override either
 list with model objects containing `id`, optional `display_name`, `input_rate`,
 `output_rate` and `max_output_tokens`. `display_name` changes only the selector;
