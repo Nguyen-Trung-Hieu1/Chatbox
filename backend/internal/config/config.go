@@ -45,6 +45,7 @@ func Load(files ...string) (Config, error) {
 		Model{ID: "ag/claude-sonnet-4-6", DisplayName: "claude-sonnet-4-6", InputRate: 4, OutputRate: 8, MaxOutputTokens: 1024},
 		Model{ID: "ag/claude-opus-4-6-thinking", DisplayName: "claude-opus-4-6-thinking", InputRate: 8, OutputRate: 16, MaxOutputTokens: 1024},
 		Model{ID: "cx/gpt-5.6-terra", DisplayName: "gpt-5.6-terra", InputRate: 8, OutputRate: 16, MaxOutputTokens: 1024},
+		Model{ID: "cx/gpt-5.6-sol", DisplayName: "gpt-5.6-sol", InputRate: 6, OutputRate: 12, MaxOutputTokens: 1024},
 		Model{ID: "cx/gpt-5.6-luna", DisplayName: "gpt-5.6-luna", InputRate: 4, OutputRate: 8, MaxOutputTokens: 1024},
 	)
 	if raw := os.Getenv("AI_FREE_MODELS_JSON"); raw != "" {
