@@ -7,6 +7,18 @@ import APIKeysPanel from './components/APIKeysPanel';
 import { api, streamChat } from './services/api';
 import './App.css';
 
+const modelStorageKey = (userId) => `chatbox:selected-model:${userId}`;
+
+function savedModel(userId) {
+  try { return window.localStorage.getItem(modelStorageKey(userId)) || ''; }
+  catch (_) { return ''; }
+}
+
+function rememberModel(userId, modelId) {
+  try { window.localStorage.setItem(modelStorageKey(userId), modelId); }
+  catch (_) { /* Storage can be disabled in private browsing. */ }
+}
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -33,6 +45,7 @@ function App() {
     setCurrentId('');
     setMessages([]);
     setEntitlement(null);
+    setSelectedModel('');
     setShowAPIKeys(false);
     setShowUpgradeConfirm(false);
   };
@@ -51,7 +64,10 @@ function App() {
     try {
       const next = await api('/api/entitlement');
       setEntitlement(next);
-      setSelectedModel((current) => next.models.some((item) => item.id === current) ? current : next.models[0]?.id || '');
+      setSelectedModel((current) => {
+        const preferred = current || savedModel(currentUser.id);
+        return next.models.some((item) => item.id === preferred) ? preferred : next.models[0]?.id || '';
+      });
     } catch (err) { handleApiError(err); }
   };
 
@@ -91,7 +107,10 @@ function App() {
     try {
       const next = await api('/api/upgrade', { method: 'POST' });
       setEntitlement(next);
-      setSelectedModel((current) => next.models.some((item) => item.id === current) ? current : next.models[0]?.id || '');
+      setSelectedModel((current) => {
+        const preferred = savedModel(currentUser.id) || current;
+        return next.models.some((item) => item.id === preferred) ? preferred : next.models[0]?.id || '';
+      });
       setNow(Date.now());
       setShowUpgradeConfirm(false);
     } catch (err) { setShowUpgradeConfirm(false); handleApiError(err); }
@@ -106,6 +125,10 @@ function App() {
     } finally {
       resetToLogin();
     }
+  };
+  const changeModel = (modelId) => {
+    setSelectedModel(modelId);
+    if (currentUser?.id) rememberModel(currentUser.id, modelId);
   };
   const closeSidebarOnMobile = () => {
     if (window.innerWidth <= 768) setSidebarOpen(false);
@@ -267,7 +290,7 @@ function App() {
           messages={messages}
           models={entitlement?.models || []}
           selectedModel={selectedModel}
-          onModelChange={setSelectedModel}
+          onModelChange={changeModel}
           onInputChange={setInput}
           onSend={sendMessage}
           onStop={stopGenerating}

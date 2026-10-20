@@ -1,0 +1,17 @@
+94385f8dd16e9365fe759cd3ca14301f
+"use strict";
+
+var _interopRequireDefault = require("E:/Chatbox1/frontend/node_modules/@babel/runtime/helpers/interopRequireDefault.js").default;
+var _react = require("@testing-library/react");
+var _App = _interopRequireDefault(require("./App"));
+var _jsxDevRuntime = require("react/jsx-dev-runtime");
+var _jsxFileName = "E:\\Chatbox1\\frontend\\src\\App.test.js";
+test('renders learn react link', () => {
+  (0, _react.render)(/*#__PURE__*/(0, _jsxDevRuntime.jsxDEV)(_App.default, {}, void 0, false, {
+    fileName: _jsxFileName,
+    lineNumber: 5,
+    columnNumber: 10
+  }, void 0));
+  expect(_react.screen.getByText(/đang kiểm tra phiên đăng nhập/i)).toBeInTheDocument();
+});
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfcmVhY3QiLCJyZXF1aXJlIiwiX0FwcCIsIl9pbnRlcm9wUmVxdWlyZURlZmF1bHQiLCJfanN4RGV2UnVudGltZSIsIl9qc3hGaWxlTmFtZSIsInRlc3QiLCJyZW5kZXIiLCJqc3hERVYiLCJkZWZhdWx0IiwiZmlsZU5hbWUiLCJsaW5lTnVtYmVyIiwiY29sdW1uTnVtYmVyIiwiZXhwZWN0Iiwic2NyZWVuIiwiZ2V0QnlUZXh0IiwidG9CZUluVGhlRG9jdW1lbnQiXSwic291cmNlcyI6WyJBcHAudGVzdC5qcyJdLCJzb3VyY2VzQ29udGVudCI6WyJpbXBvcnQgeyByZW5kZXIsIHNjcmVlbiB9IGZyb20gJ0B0ZXN0aW5nLWxpYnJhcnkvcmVhY3QnO1xuaW1wb3J0IEFwcCBmcm9tICcuL0FwcCc7XG5cbnRlc3QoJ3JlbmRlcnMgbGVhcm4gcmVhY3QgbGluaycsICgpID0+IHtcbiAgcmVuZGVyKDxBcHAgLz4pO1xuICBleHBlY3Qoc2NyZWVuLmdldEJ5VGV4dCgvxJFhbmcga2nhu4NtIHRyYSBwaGnDqm4gxJHEg25nIG5o4bqtcC9pKSkudG9CZUluVGhlRG9jdW1lbnQoKTtcbn0pO1xuIl0sIm1hcHBpbmdzIjoiOzs7QUFBQSxJQUFBQSxNQUFBLEdBQUFDLE9BQUE7QUFDQSxJQUFBQyxJQUFBLEdBQUFDLHNCQUFBLENBQUFGLE9BQUE7QUFBd0IsSUFBQUcsY0FBQSxHQUFBSCxPQUFBO0FBQUEsSUFBQUksWUFBQTtBQUV4QkMsSUFBSSxDQUFDLDBCQUEwQixFQUFFLE1BQU07RUFDckMsSUFBQUMsYUFBTSxlQUFDLElBQUFILGNBQUEsQ0FBQUksTUFBQSxFQUFDTixJQUFBLENBQUFPLE9BQUc7SUFBQUMsUUFBQSxFQUFBTCxZQUFBO0lBQUFNLFVBQUE7SUFBQUMsWUFBQTtFQUFBLFNBQUUsQ0FBQyxDQUFDO0VBQ2ZDLE1BQU0sQ0FBQ0MsYUFBTSxDQUFDQyxTQUFTLENBQUMsZ0NBQWdDLENBQUMsQ0FBQyxDQUFDQyxpQkFBaUIsQ0FBQyxDQUFDO0FBQ2hGLENBQUMsQ0FBQyIsImlnbm9yZUxpc3QiOltdfQ==

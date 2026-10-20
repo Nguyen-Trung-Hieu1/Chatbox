@@ -1,0 +1,48 @@
+8972d463038a102efe5ee3481f8d4a42
+"use strict";
+
+var _interopRequireDefault = require("E:/Chatbox1/frontend/node_modules/@babel/runtime/helpers/interopRequireDefault.js").default;
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = ChatHeader;
+var _react = _interopRequireDefault(require("react"));
+var _icons = require("./icons");
+var _jsxDevRuntime = require("react/jsx-dev-runtime");
+var _jsxFileName = "E:\\Chatbox1\\frontend\\src\\components\\ChatHeader.js";
+function ChatHeader({
+  sidebarOpen,
+  onOpenSidebar
+}) {
+  return /*#__PURE__*/(0, _jsxDevRuntime.jsxDEV)("header", {
+    className: "chat-header",
+    children: [/*#__PURE__*/(0, _jsxDevRuntime.jsxDEV)("button", {
+      className: `icon-button open-sidebar ${sidebarOpen ? 'hidden' : ''}`,
+      onClick: onOpenSidebar,
+      "aria-label": "M\u1EDF thanh b\xEAn",
+      title: "M\u1EDF thanh b\xEAn",
+      tabIndex: sidebarOpen ? -1 : 0,
+      children: /*#__PURE__*/(0, _jsxDevRuntime.jsxDEV)(_icons.SidebarIcon, {}, void 0, false, {
+        fileName: _jsxFileName,
+        lineNumber: 14,
+        columnNumber: 9
+      }, this)
+    }, void 0, false, {
+      fileName: _jsxFileName,
+      lineNumber: 7,
+      columnNumber: 7
+    }, this), /*#__PURE__*/(0, _jsxDevRuntime.jsxDEV)("div", {
+      className: "app-title",
+      children: "Chatbox"
+    }, void 0, false, {
+      fileName: _jsxFileName,
+      lineNumber: 16,
+      columnNumber: 7
+    }, this)]
+  }, void 0, true, {
+    fileName: _jsxFileName,
+    lineNumber: 6,
+    columnNumber: 5
+  }, this);
+}
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJfcmVhY3QiLCJfaW50ZXJvcFJlcXVpcmVEZWZhdWx0IiwicmVxdWlyZSIsIl9pY29ucyIsIl9qc3hEZXZSdW50aW1lIiwiX2pzeEZpbGVOYW1lIiwiQ2hhdEhlYWRlciIsInNpZGViYXJPcGVuIiwib25PcGVuU2lkZWJhciIsImpzeERFViIsImNsYXNzTmFtZSIsImNoaWxkcmVuIiwib25DbGljayIsInRpdGxlIiwidGFiSW5kZXgiLCJTaWRlYmFySWNvbiIsImZpbGVOYW1lIiwibGluZU51bWJlciIsImNvbHVtbk51bWJlciJdLCJzb3VyY2VzIjpbIkNoYXRIZWFkZXIuanMiXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IFJlYWN0IGZyb20gJ3JlYWN0JztcbmltcG9ydCB7IFNpZGViYXJJY29uIH0gZnJvbSAnLi9pY29ucyc7XG5cbmV4cG9ydCBkZWZhdWx0IGZ1bmN0aW9uIENoYXRIZWFkZXIoeyBzaWRlYmFyT3Blbiwgb25PcGVuU2lkZWJhciB9KSB7XG4gIHJldHVybiAoXG4gICAgPGhlYWRlciBjbGFzc05hbWU9XCJjaGF0LWhlYWRlclwiPlxuICAgICAgPGJ1dHRvblxuICAgICAgICBjbGFzc05hbWU9e2BpY29uLWJ1dHRvbiBvcGVuLXNpZGViYXIgJHtzaWRlYmFyT3BlbiA/ICdoaWRkZW4nIDogJyd9YH1cbiAgICAgICAgb25DbGljaz17b25PcGVuU2lkZWJhcn1cbiAgICAgICAgYXJpYS1sYWJlbD1cIk3hu58gdGhhbmggYsOqblwiXG4gICAgICAgIHRpdGxlPVwiTeG7nyB0aGFuaCBiw6puXCJcbiAgICAgICAgdGFiSW5kZXg9e3NpZGViYXJPcGVuID8gLTEgOiAwfVxuICAgICAgPlxuICAgICAgICA8U2lkZWJhckljb24gLz5cbiAgICAgIDwvYnV0dG9uPlxuICAgICAgPGRpdiBjbGFzc05hbWU9XCJhcHAtdGl0bGVcIj5DaGF0Ym94PC9kaXY+XG4gICAgPC9oZWFkZXI+XG4gICk7XG59XG4iXSwibWFwcGluZ3MiOiI7Ozs7Ozs7QUFBQSxJQUFBQSxNQUFBLEdBQUFDLHNCQUFBLENBQUFDLE9BQUE7QUFDQSxJQUFBQyxNQUFBLEdBQUFELE9BQUE7QUFBc0MsSUFBQUUsY0FBQSxHQUFBRixPQUFBO0FBQUEsSUFBQUcsWUFBQTtBQUV2QixTQUFTQyxVQUFVQSxDQUFDO0VBQUVDLFdBQVc7RUFBRUM7QUFBYyxDQUFDLEVBQUU7RUFDakUsb0JBQ0UsSUFBQUosY0FBQSxDQUFBSyxNQUFBO0lBQVFDLFNBQVMsRUFBQyxhQUFhO0lBQUFDLFFBQUEsZ0JBQzdCLElBQUFQLGNBQUEsQ0FBQUssTUFBQTtNQUNFQyxTQUFTLEVBQUUsNEJBQTRCSCxXQUFXLEdBQUcsUUFBUSxHQUFHLEVBQUUsRUFBRztNQUNyRUssT0FBTyxFQUFFSixhQUFjO01BQ3ZCLGNBQVcsc0JBQWM7TUFDekJLLEtBQUssRUFBQyxzQkFBYztNQUNwQkMsUUFBUSxFQUFFUCxXQUFXLEdBQUcsQ0FBQyxDQUFDLEdBQUcsQ0FBRTtNQUFBSSxRQUFBLGVBRS9CLElBQUFQLGNBQUEsQ0FBQUssTUFBQSxFQUFDTixNQUFBLENBQUFZLFdBQVc7UUFBQUMsUUFBQSxFQUFBWCxZQUFBO1FBQUFZLFVBQUE7UUFBQUMsWUFBQTtNQUFBLE9BQUU7SUFBQztNQUFBRixRQUFBLEVBQUFYLFlBQUE7TUFBQVksVUFBQTtNQUFBQyxZQUFBO0lBQUEsT0FDVCxDQUFDLGVBQ1QsSUFBQWQsY0FBQSxDQUFBSyxNQUFBO01BQUtDLFNBQVMsRUFBQyxXQUFXO01BQUFDLFFBQUEsRUFBQztJQUFPO01BQUFLLFFBQUEsRUFBQVgsWUFBQTtNQUFBWSxVQUFBO01BQUFDLFlBQUE7SUFBQSxPQUFLLENBQUM7RUFBQTtJQUFBRixRQUFBLEVBQUFYLFlBQUE7SUFBQVksVUFBQTtJQUFBQyxZQUFBO0VBQUEsT0FDbEMsQ0FBQztBQUViIiwiaWdub3JlTGlzdCI6W119
