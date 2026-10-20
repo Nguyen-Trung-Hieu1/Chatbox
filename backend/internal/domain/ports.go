@@ -43,7 +43,7 @@ type AIClient interface {
 type BillingRepository interface {
 	Ensure(context.Context, string, int64) error
 	Balance(context.Context, string) (int64, error)
-	Plan(context.Context, string) (string, *time.Time, error)
+	Plan(context.Context, string, int64) (string, *time.Time, *time.Time, error)
 	ActivatePaid(context.Context, string, time.Time, time.Time) error
 	Reserve(context.Context, string, int64) error
 	Settle(context.Context, string, int64, int64, UsageRecord) error

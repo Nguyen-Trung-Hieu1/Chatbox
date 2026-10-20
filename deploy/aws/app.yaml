@@ -25,6 +25,8 @@ spec:
               value: https://chatbox.cyou
             - name: COOKIE_SECURE
               value: "true"
+            - name: FREE_INITIAL_CREDITS
+              value: "1000"
           ports:
             - containerPort: 8080
           readinessProbe:

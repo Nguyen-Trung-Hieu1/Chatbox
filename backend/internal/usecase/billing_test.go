@@ -9,15 +9,16 @@ import (
 )
 
 type billingStub struct {
-	plan      string
-	paidUntil *time.Time
-	balance   int64
+	plan          string
+	paidUntil     *time.Time
+	creditResetAt *time.Time
+	balance       int64
 }
 
 func (b *billingStub) Ensure(context.Context, string, int64) error    { return nil }
 func (b *billingStub) Balance(context.Context, string) (int64, error) { return b.balance, nil }
-func (b *billingStub) Plan(context.Context, string) (string, *time.Time, error) {
-	return b.plan, b.paidUntil, nil
+func (b *billingStub) Plan(context.Context, string, int64) (string, *time.Time, *time.Time, error) {
+	return b.plan, b.paidUntil, b.creditResetAt, nil
 }
 func (b *billingStub) ActivatePaid(_ context.Context, _ string, now, until time.Time) error {
 	if until.Sub(now) != 48*time.Hour {
@@ -25,6 +26,9 @@ func (b *billingStub) ActivatePaid(_ context.Context, _ string, now, until time.
 	}
 	b.plan = "paid"
 	b.paidUntil = &until
+	resetAt := now.Add(2 * time.Hour)
+	b.creditResetAt = &resetAt
+	b.balance = 2000
 	return nil
 }
 func (b *billingStub) Reserve(context.Context, string, int64) error { return nil }
@@ -61,7 +65,7 @@ func TestUpgradeGrantsPaidForTwoDays(t *testing.T) {
 	b := &billingStub{plan: "free", balance: 100}
 	s := NewChat(nil, nil, nil, 100, b, nil, nil, 100)
 	e, err := s.Upgrade(context.Background(), "user")
-	if err != nil || e.Plan != "paid" || e.PaidUntil == nil {
+	if err != nil || e.Plan != "paid" || e.PaidUntil == nil || e.CreditResetAt == nil || e.Balance != 2000 {
 		t.Fatalf("upgrade failed: entitlement=%+v err=%v", e, err)
 	}
 }

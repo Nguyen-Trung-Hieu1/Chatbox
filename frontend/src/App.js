@@ -72,11 +72,12 @@ function App() {
     if (!currentUser) return undefined;
     const timer = setInterval(() => {
       setNow(Date.now());
-      if (entitlement?.paid_until && Date.now() >= Date.parse(entitlement.paid_until)) fetchEntitlement();
+      if ((entitlement?.paid_until && Date.now() >= Date.parse(entitlement.paid_until)) ||
+          (entitlement?.credit_reset_at && Date.now() >= Date.parse(entitlement.credit_reset_at))) fetchEntitlement();
     }, 30000);
     return () => clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, entitlement?.paid_until]);
+  }, [currentUser, entitlement?.paid_until, entitlement?.credit_reset_at]);
   useEffect(() => {
     if (!showUpgradeConfirm) return undefined;
     const onEscape = (event) => { if (event.key === 'Escape' && !upgrading) setShowUpgradeConfirm(false); };
@@ -237,6 +238,7 @@ function App() {
         plan={entitlement?.plan}
         creditBalance={entitlement?.balance}
         paidUntil={entitlement?.paid_until}
+        creditResetAt={entitlement?.credit_reset_at}
         now={now}
         upgrading={upgrading}
         onUpgrade={() => setShowUpgradeConfirm(true)}
@@ -277,7 +279,7 @@ function App() {
           <div className="upgrade-dialog-icon" aria-hidden="true">✦</div>
           <h2 id="upgrade-title">Nâng lên gói Paid?</h2>
           <p>Bạn sẽ dùng các model của gói Paid trong <strong>2 ngày</strong>. Hết thời gian, tài khoản tự trở về gói Free.</p>
-          <p className="upgrade-dialog-note">Số credit hiện có không thay đổi khi nâng gói.</p>
+          <p className="upgrade-dialog-note">Free có 1.000 credit mỗi 2 giờ. Khi nâng gói, credit được đặt thành 2.000 và tiếp tục reset sau mỗi 2 giờ trong thời gian Paid còn hiệu lực.</p>
           <div className="upgrade-dialog-actions">
             <button type="button" className="upgrade-cancel" onClick={() => setShowUpgradeConfirm(false)} disabled={upgrading} autoFocus>Để sau</button>
             <button type="button" className="upgrade-confirm" onClick={upgradePlan} disabled={upgrading}>{upgrading ? 'Đang nâng gói…' : 'Xác nhận nâng gói'}</button>

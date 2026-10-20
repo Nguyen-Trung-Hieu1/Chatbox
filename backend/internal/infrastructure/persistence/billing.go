@@ -11,6 +11,9 @@ import (
 
 type BillingRepository struct{ db *Mongo }
 
+const paidCredits int64 = 2000
+const creditPeriod = 2 * time.Hour
+
 func NewBillingRepository(db *Mongo) *BillingRepository { return &BillingRepository{db} }
 
 func (r *BillingRepository) Ensure(ctx context.Context, user string, initial int64) error {
@@ -18,7 +21,7 @@ func (r *BillingRepository) Ensure(ctx context.Context, user string, initial int
 	if err != nil {
 		return err
 	}
-	_, err = r.db.Wallets.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$setOnInsert": bson.M{"plan": "free", "balance": initial, "usage": bson.A{}}}, options.Update().SetUpsert(true))
+	_, err = r.db.Wallets.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$setOnInsert": bson.M{"plan": "free", "balance": initial, "credit_reset_at": time.Now().UTC().Add(creditPeriod), "usage": bson.A{}}}, options.Update().SetUpsert(true))
 	return err
 }
 func (r *BillingRepository) Balance(ctx context.Context, user string) (int64, error) {
@@ -32,27 +35,49 @@ func (r *BillingRepository) Balance(ctx context.Context, user string) (int64, er
 	err = r.db.Wallets.FindOne(ctx, bson.M{"_id": id}).Decode(&d)
 	return d.Balance, mapErr(err)
 }
-func (r *BillingRepository) Plan(ctx context.Context, user string) (string, *time.Time, error) {
+func (r *BillingRepository) Plan(ctx context.Context, user string, freeCredits int64) (string, *time.Time, *time.Time, error) {
 	id, err := oid(user)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
+	now := time.Now().UTC()
 	_, err = r.db.Wallets.UpdateOne(ctx,
 		bson.M{"_id": id, "plan": "paid", "$or": bson.A{
-			bson.M{"paid_until": bson.M{"$lte": time.Now().UTC()}},
+			bson.M{"paid_until": bson.M{"$lte": now}},
 			bson.M{"paid_until": bson.M{"$exists": false}},
 		}},
-		bson.M{"$set": bson.M{"plan": "free"}, "$unset": bson.M{"paid_until": ""}},
+		bson.M{"$set": bson.M{"plan": "free", "balance": freeCredits, "credit_reset_at": now.Add(creditPeriod)}, "$unset": bson.M{"paid_until": ""}},
 	)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
+	}
+	_, err = r.db.Wallets.UpdateOne(ctx,
+		bson.M{"_id": id, "plan": "paid", "paid_until": bson.M{"$gt": now}, "$or": bson.A{
+			bson.M{"credit_reset_at": bson.M{"$lte": now}},
+			bson.M{"credit_reset_at": bson.M{"$exists": false}},
+		}},
+		bson.M{"$set": bson.M{"balance": paidCredits, "credit_reset_at": now.Add(creditPeriod)}},
+	)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	_, err = r.db.Wallets.UpdateOne(ctx,
+		bson.M{"_id": id, "plan": "free", "$or": bson.A{
+			bson.M{"credit_reset_at": bson.M{"$lte": now}},
+			bson.M{"credit_reset_at": bson.M{"$exists": false}},
+		}},
+		bson.M{"$set": bson.M{"balance": freeCredits, "credit_reset_at": now.Add(creditPeriod)}},
+	)
+	if err != nil {
+		return "", nil, nil, err
 	}
 	var d struct {
-		Plan      string     `bson:"plan"`
-		PaidUntil *time.Time `bson:"paid_until"`
+		Plan          string     `bson:"plan"`
+		PaidUntil     *time.Time `bson:"paid_until"`
+		CreditResetAt *time.Time `bson:"credit_reset_at"`
 	}
 	err = r.db.Wallets.FindOne(ctx, bson.M{"_id": id}).Decode(&d)
-	return d.Plan, d.PaidUntil, mapErr(err)
+	return d.Plan, d.PaidUntil, d.CreditResetAt, mapErr(err)
 }
 func (r *BillingRepository) ActivatePaid(ctx context.Context, user string, now, until time.Time) error {
 	id, err := oid(user)
@@ -65,7 +90,7 @@ func (r *BillingRepository) ActivatePaid(ctx context.Context, user string, now, 
 			bson.M{"paid_until": bson.M{"$lte": now}},
 			bson.M{"paid_until": bson.M{"$exists": false}},
 		}},
-		bson.M{"$set": bson.M{"plan": "paid", "paid_until": until}},
+		bson.M{"$set": bson.M{"plan": "paid", "paid_until": until, "balance": paidCredits, "credit_reset_at": now.Add(creditPeriod)}},
 	)
 	if err != nil {
 		return err

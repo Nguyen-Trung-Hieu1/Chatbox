@@ -30,7 +30,7 @@ func (s *Chat) Entitlement(ctx context.Context, user string) (*domain.Entitlemen
 	if err := s.billing.Ensure(ctx, user, s.initialCredits); err != nil {
 		return nil, err
 	}
-	plan, paidUntil, err := s.billing.Plan(ctx, user)
+	plan, paidUntil, creditResetAt, err := s.billing.Plan(ctx, user, s.initialCredits)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (s *Chat) Entitlement(ctx context.Context, user string) (*domain.Entitlemen
 	} else {
 		plan, paidUntil = "free", nil
 	}
-	return &domain.Entitlement{Plan: plan, PaidUntil: paidUntil, Balance: balance, Models: models}, nil
+	return &domain.Entitlement{Plan: plan, PaidUntil: paidUntil, CreditResetAt: creditResetAt, Balance: balance, Models: models}, nil
 }
 func (s *Chat) Upgrade(ctx context.Context, user string) (*domain.Entitlement, error) {
 	if err := s.billing.Ensure(ctx, user, s.initialCredits); err != nil {

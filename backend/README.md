@@ -49,7 +49,10 @@ list with model objects containing `id`, optional `display_name`, `input_rate`,
 `output_rate` and `max_output_tokens`. `display_name` changes only the selector;
 9Router always receives the full `id`. Rates are trial credits per 1,000 tokens,
 not verified provider prices. New accounts get
-`FREE_INITIAL_CREDITS` once. Existing users receive a wallet on first access.
+`FREE_INITIAL_CREDITS` (default 1,000) when a wallet is created and at each
+two-hour reset. Existing users receive a wallet on first access. Upgrading to
+Paid sets the balance to 2,000 credits; Paid resets to 2,000 every two hours.
+The next reset is applied on the first request after its deadline.
 
 An operator can grant test access from the backend directory with:
 

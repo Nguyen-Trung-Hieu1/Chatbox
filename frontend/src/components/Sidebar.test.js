@@ -42,16 +42,20 @@ test('shows the account plan below the username', () => {
 });
 
 test('shows the upgrade button for free accounts', () => {
-  const { props } = renderSidebar({ plan: 'free', onUpgrade: jest.fn() });
+  const { props } = renderSidebar({ plan: 'free', creditResetAt: '2026-10-20T02:00:00Z', now: Date.parse('2026-10-20T00:00:00Z'), onUpgrade: jest.fn() });
   fireEvent.click(screen.getByText('Xem chi tiết gói'));
+  expect(screen.getByText('Reset credit sau')).toBeInTheDocument();
+  expect(screen.getByText('2 giờ 0 phút')).toBeInTheDocument();
   fireEvent.click(screen.getByText('Nâng gói Paid (2 ngày)'));
   expect(props.onUpgrade).toHaveBeenCalledTimes(1);
 });
 
-test('shows remaining time for paid accounts', () => {
-  renderSidebar({ plan: 'paid', paidUntil: '2026-10-21T00:00:00Z', now: Date.parse('2026-10-20T00:00:00Z') });
+test('shows remaining time and credit reset for paid accounts', () => {
+  renderSidebar({ plan: 'paid', paidUntil: '2026-10-21T00:00:00Z', creditResetAt: '2026-10-20T02:00:00Z', now: Date.parse('2026-10-20T00:00:00Z') });
   expect(screen.queryByText('1 ngày 0 giờ 0 phút')).not.toBeInTheDocument();
   fireEvent.click(screen.getByText('Xem chi tiết gói'));
   expect(screen.getByText('1 ngày 0 giờ 0 phút')).toBeInTheDocument();
+  expect(screen.getByText('Reset credit sau')).toBeInTheDocument();
+  expect(screen.getByText('2 giờ 0 phút')).toBeInTheDocument();
   expect(screen.queryByText('Nâng gói Paid (2 ngày)')).not.toBeInTheDocument();
 });

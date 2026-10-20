@@ -5,12 +5,16 @@ import "testing"
 func TestDefaultModelCatalog(t *testing.T) {
 	t.Setenv("AI_FREE_MODELS_JSON", "")
 	t.Setenv("AI_PAID_MODELS_JSON", "")
+	t.Setenv("FREE_INITIAL_CREDITS", "")
 	c, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(c.FreeModels) != 4 || len(c.PaidModels) != 10 {
 		t.Fatalf("free=%d paid=%d", len(c.FreeModels), len(c.PaidModels))
+	}
+	if c.FreeCredits != 1000 {
+		t.Fatalf("initial free credits = %d", c.FreeCredits)
 	}
 	count := 0
 	for _, m := range c.PaidModels {

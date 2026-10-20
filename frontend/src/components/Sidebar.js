@@ -9,6 +9,7 @@ export default function Sidebar({
   plan,
   creditBalance,
   paidUntil,
+  creditResetAt,
   now = Date.now(),
   upgrading = false,
   onUpgrade,
@@ -235,6 +236,7 @@ export default function Sidebar({
           {showAccountDetails && <div className="account-details">
             <div><span>Credit còn lại</span><strong>{Number.isFinite(creditBalance) ? new Intl.NumberFormat('vi-VN').format(creditBalance) : '—'}</strong></div>
             {plan === 'paid' && paidUntil && <div><span>Thời gian còn lại</span><strong>{formatRemaining(Date.parse(paidUntil) - now)}</strong></div>}
+            {creditResetAt && <div><span>Reset credit sau</span><strong>{formatRemaining(Date.parse(creditResetAt) - now)}</strong></div>}
             {plan === 'free' && <button className="upgrade-button" onClick={onUpgrade} disabled={upgrading}>{upgrading ? 'Đang nâng gói…' : 'Nâng gói Paid (2 ngày)'}</button>}
           </div>}
         </div>
@@ -248,5 +250,6 @@ function formatRemaining(ms) {
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor((minutes % 1440) / 60);
   const mins = minutes % 60;
+  if (days === 0) return `${hours} giờ ${mins} phút`;
   return `${days} ngày ${hours} giờ ${mins} phút`;
 }
