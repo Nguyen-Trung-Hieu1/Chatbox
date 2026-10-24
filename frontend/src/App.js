@@ -4,6 +4,7 @@ import ChatHeader from './components/ChatHeader';
 import ChatView from './components/ChatView';
 import Sidebar from './components/Sidebar';
 import APIKeysPanel from './components/APIKeysPanel';
+import AdminDashboard from './components/AdminDashboard';
 import { api, streamChat } from './services/api';
 import './App.css';
 
@@ -29,11 +30,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [entitlement, setEntitlement] = useState(null);
-  const [upgrading, setUpgrading] = useState(false);
-  const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [selectedModel, setSelectedModel] = useState('');
   const [showAPIKeys, setShowAPIKeys] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(() => window.location.pathname === '/admin');
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
   const streamController = useRef(null);
 
@@ -47,7 +47,7 @@ function App() {
     setEntitlement(null);
     setSelectedModel('');
     setShowAPIKeys(false);
-    setShowUpgradeConfirm(false);
+    setShowAdmin(false);
   };
   const handleApiError = (err) => {
     if (err.status === 401) resetToLogin();
@@ -79,6 +79,15 @@ function App() {
       .finally(() => setCheckingSession(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => {
+    const onNavigation = () => setShowAdmin(window.location.pathname === '/admin');
+    window.addEventListener('popstate', onNavigation);
+    return () => window.removeEventListener('popstate', onNavigation);
+  }, []);
+  const navigateAdmin = (open) => {
+    window.history.pushState({}, '', open ? '/admin' : '/');
+    setShowAdmin(open);
+  };
   // Conversations refresh only when the authenticated user changes.
   useEffect(() => {
     if (currentUser) { fetchConversations(); fetchEntitlement(); }
@@ -88,35 +97,11 @@ function App() {
     if (!currentUser) return undefined;
     const timer = setInterval(() => {
       setNow(Date.now());
-      if ((entitlement?.paid_until && Date.now() >= Date.parse(entitlement.paid_until)) ||
-          (entitlement?.credit_reset_at && Date.now() >= Date.parse(entitlement.credit_reset_at))) fetchEntitlement();
+      fetchEntitlement();
     }, 30000);
     return () => clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, entitlement?.paid_until, entitlement?.credit_reset_at]);
-  useEffect(() => {
-    if (!showUpgradeConfirm) return undefined;
-    const onEscape = (event) => { if (event.key === 'Escape' && !upgrading) setShowUpgradeConfirm(false); };
-    document.addEventListener('keydown', onEscape);
-    return () => document.removeEventListener('keydown', onEscape);
-  }, [showUpgradeConfirm, upgrading]);
-
-  const upgradePlan = async () => {
-    setUpgrading(true);
-    setError('');
-    try {
-      const next = await api('/api/upgrade', { method: 'POST' });
-      setEntitlement(next);
-      setSelectedModel((current) => {
-        const preferred = savedModel(currentUser.id) || current;
-        return next.models.some((item) => item.id === preferred) ? preferred : next.models[0]?.id || '';
-      });
-      setNow(Date.now());
-      setShowUpgradeConfirm(false);
-    } catch (err) { setShowUpgradeConfirm(false); handleApiError(err); }
-    finally { setUpgrading(false); }
-  };
-
+  }, [currentUser]);
   const handleLogout = async () => {
     try {
       await api('/api/logout', { method: 'POST' });
@@ -251,6 +236,10 @@ function App() {
   if (!currentUser) {
     return <Auth onLoginSuccess={setCurrentUser} api={api} />;
   }
+  if (showAdmin) {
+    if (currentUser.is_admin) return <AdminDashboard onBack={() => navigateAdmin(false)} onLogout={handleLogout} />;
+    return <div className="admin-page"><div className="admin-denied"><h1>Không có quyền truy cập</h1><p>Tài khoản {currentUser.username} chưa được cấp quyền quản trị.</p><button type="button" onClick={() => navigateAdmin(false)}>Về Chatbox</button></div></div>;
+  }
 
   return (
     <div className="app-shell">
@@ -263,9 +252,9 @@ function App() {
         paidUntil={entitlement?.paid_until}
         creditResetAt={entitlement?.credit_reset_at}
         now={now}
-        upgrading={upgrading}
-        onUpgrade={() => setShowUpgradeConfirm(true)}
         onManageKeys={() => setShowAPIKeys(true)}
+        isAdmin={currentUser.is_admin}
+        onOpenAdmin={() => navigateAdmin(true)}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onDelete={deleteConversation}
@@ -297,18 +286,6 @@ function App() {
         />
       </main>
       {showAPIKeys && <APIKeysPanel models={entitlement?.models || []} onClose={() => setShowAPIKeys(false)} />}
-      {showUpgradeConfirm && <div className="upgrade-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !upgrading) setShowUpgradeConfirm(false); }}>
-        <section className="upgrade-dialog" role="dialog" aria-modal="true" aria-labelledby="upgrade-title">
-          <div className="upgrade-dialog-icon" aria-hidden="true">✦</div>
-          <h2 id="upgrade-title">Nâng lên gói Paid?</h2>
-          <p>Bạn sẽ dùng các model của gói Paid trong <strong>2 ngày</strong>. Hết thời gian, tài khoản tự trở về gói Free.</p>
-          <p className="upgrade-dialog-note">Free có 1.000 credit mỗi 2 giờ. Khi nâng gói, credit được đặt thành 2.000 và tiếp tục reset sau mỗi 2 giờ trong thời gian Paid còn hiệu lực.</p>
-          <div className="upgrade-dialog-actions">
-            <button type="button" className="upgrade-cancel" onClick={() => setShowUpgradeConfirm(false)} disabled={upgrading} autoFocus>Để sau</button>
-            <button type="button" className="upgrade-confirm" onClick={upgradePlan} disabled={upgrading}>{upgrading ? 'Đang nâng gói…' : 'Xác nhận nâng gói'}</button>
-          </div>
-        </section>
-      </div>}
     </div>
   );
 }

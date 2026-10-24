@@ -11,9 +11,9 @@ export default function Sidebar({
   paidUntil,
   creditResetAt,
   now = Date.now(),
-  upgrading = false,
-  onUpgrade,
   onManageKeys,
+  isAdmin,
+  onOpenAdmin,
   isOpen,
   onClose,
   onDelete,
@@ -237,8 +237,8 @@ export default function Sidebar({
             <div><span>Credit còn lại</span><strong>{Number.isFinite(creditBalance) ? new Intl.NumberFormat('vi-VN').format(creditBalance) : '—'}</strong></div>
             {plan === 'paid' && paidUntil && <div><span>Thời gian còn lại</span><strong>{formatRemaining(Date.parse(paidUntil) - now)}</strong></div>}
             {creditResetAt && <div><span>Reset credit sau</span><strong>{formatRemaining(Date.parse(creditResetAt) - now)}</strong></div>}
-            {plan === 'free' && <button className="upgrade-button" onClick={onUpgrade} disabled={upgrading}>{upgrading ? 'Đang nâng gói…' : 'Nâng gói Paid (2 ngày)'}</button>}
           </div>}
+          {isAdmin && <button type="button" className="admin-open-button" onClick={onOpenAdmin}>Trang quản trị</button>}
         </div>
       </aside>
     </>

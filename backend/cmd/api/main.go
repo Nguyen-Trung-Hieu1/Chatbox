@@ -26,6 +26,11 @@ func main() {
 	}
 	defer db.Client.Disconnect(context.Background())
 	auth := usecase.NewAuth(persistence.NewUserRepository(db), persistence.NewSessionRepository(db), cfg.SessionTTL)
+	if cfg.AdminBootstrapUsername != "" {
+		if err := auth.BootstrapAdmin(ctx, cfg.AdminBootstrapUsername, cfg.AdminBootstrapPassword); err != nil {
+			log.Fatal("Không thể khởi tạo tài khoản admin: ", err)
+		}
+	}
 	convert := func(models []config.Model) []domain.ModelPolicy {
 		out := make([]domain.ModelPolicy, len(models))
 		for i, m := range models {
@@ -35,7 +40,8 @@ func main() {
 	}
 	chat := usecase.NewChat(persistence.NewConversationRepository(db), persistence.NewMessageRepository(db), ai.New(cfg.AIEndpoint, cfg.AIKey, cfg.AIModel), cfg.TokenBudget, persistence.NewBillingRepository(db), convert(cfg.FreeModels), convert(cfg.PaidModels), cfg.FreeCredits)
 	keys := usecase.NewAPIKeys(persistence.NewAPIKeyRepository(db), persistence.NewUserRepository(db))
-	transport := httpdelivery.New(auth, chat, keys, cfg.CookieName, cfg.CookieSecure)
+	admin := usecase.NewAdmin(persistence.NewAdminRepository(db), cfg.FreeCredits)
+	transport := httpdelivery.New(auth, chat, keys, admin, cfg.CookieName, cfg.CookieSecure)
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: transport.Handler(cfg.CORSOrigin), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 2 * time.Minute, IdleTimeout: 60 * time.Second}
 	log.Printf("Backend đang chạy tại %s", server.Addr)
 	log.Fatal(server.ListenAndServe())

@@ -46,16 +46,6 @@ func (s *Chat) Entitlement(ctx context.Context, user string) (*domain.Entitlemen
 	}
 	return &domain.Entitlement{Plan: plan, PaidUntil: paidUntil, CreditResetAt: creditResetAt, Balance: balance, Models: models}, nil
 }
-func (s *Chat) Upgrade(ctx context.Context, user string) (*domain.Entitlement, error) {
-	if err := s.billing.Ensure(ctx, user, s.initialCredits); err != nil {
-		return nil, err
-	}
-	now := time.Now().UTC()
-	if err := s.billing.ActivatePaid(ctx, user, now, now.Add(48*time.Hour)); err != nil {
-		return nil, err
-	}
-	return s.Entitlement(ctx, user)
-}
 func (s *Chat) UsageHistory(ctx context.Context, user string) ([]domain.UsageRecord, error) {
 	return s.billing.History(ctx, user)
 }

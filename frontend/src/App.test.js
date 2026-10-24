@@ -29,3 +29,11 @@ test('restores the selected model after remounting', async () => {
   render(<App />);
   await waitFor(() => expect(screen.getByRole('button', { name: 'Chọn model' })).toHaveTextContent('Sol'));
 });
+
+test('explains why a regular account cannot open /admin', async () => {
+  window.history.replaceState({}, '', '/admin');
+  render(<App />);
+  expect(await screen.findByText('Không có quyền truy cập')).toBeInTheDocument();
+  expect(screen.getByText('Tài khoản tester chưa được cấp quyền quản trị.')).toBeInTheDocument();
+  window.history.replaceState({}, '', '/');
+});

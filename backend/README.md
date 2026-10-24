@@ -54,6 +54,23 @@ two-hour reset. Existing users receive a wallet on first access. Upgrading to
 Paid sets the balance to 2,000 credits; Paid resets to 2,000 every two hours.
 The next reset is applied on the first request after its deadline.
 
+## Admin usage dashboard
+
+An account needs `is_admin: true` in the MongoDB `users` collection to open
+`/admin`. For a fresh local database, set `ADMIN_BOOTSTRAP_USERNAME` and
+`ADMIN_BOOTSTRAP_PASSWORD` in the private `backend/.env` file. On startup the
+backend creates that account with a bcrypt password hash and admin permission.
+An existing non-admin username is never promoted automatically. Alternatively,
+grant an existing account through an operator session in `mongosh`:
+
+```javascript
+db.users.updateOne({ username: "admin" }, { $set: { is_admin: true } })
+```
+
+The admin API returns user plans and daily Web/API token usage. Dates use
+Vietnam time (UTC+7). The existing wallet stores only its 1,000 most recent
+usage records per user, so older activity is not included in the report.
+
 An operator can grant test access from the backend directory with:
 
 ```

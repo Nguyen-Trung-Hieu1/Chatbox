@@ -45,3 +45,16 @@ func TestDefaultModelCatalog(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminBootstrapRequiresBothSettings(t *testing.T) {
+	t.Setenv("ADMIN_BOOTSTRAP_USERNAME", "admin")
+	t.Setenv("ADMIN_BOOTSTRAP_PASSWORD", "")
+	if _, err := Load(); err == nil {
+		t.Fatal("accepted bootstrap username without password")
+	}
+	t.Setenv("ADMIN_BOOTSTRAP_PASSWORD", "123456789")
+	c, err := Load()
+	if err != nil || c.AdminBootstrapUsername != "admin" {
+		t.Fatalf("bootstrap config: %+v, %v", c.AdminBootstrapUsername, err)
+	}
+}

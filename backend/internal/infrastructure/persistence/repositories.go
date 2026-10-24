@@ -15,6 +15,7 @@ type userDoc struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty"`
 	Username  string             `bson:"username"`
 	Password  string             `bson:"password"`
+	IsAdmin   bool               `bson:"is_admin"`
 	CreatedAt time.Time          `bson:"created_at"`
 }
 type sessionDoc struct {
@@ -58,7 +59,7 @@ func mapErr(e error) error {
 	return e
 }
 func userEntity(d userDoc) *domain.User {
-	return &domain.User{ID: d.ID.Hex(), Username: d.Username, Password: d.Password, CreatedAt: d.CreatedAt}
+	return &domain.User{ID: d.ID.Hex(), Username: d.Username, Password: d.Password, IsAdmin: d.IsAdmin, CreatedAt: d.CreatedAt}
 }
 func conversationEntity(d conversationDoc) *domain.Conversation {
 	return &domain.Conversation{ID: d.ID.Hex(), OwnerID: d.OwnerID.Hex(), Title: d.Title, Summary: d.Summary, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}
@@ -71,7 +72,7 @@ type UserRepository struct{ db *Mongo }
 
 func NewUserRepository(db *Mongo) *UserRepository { return &UserRepository{db} }
 func (r *UserRepository) Create(ctx context.Context, u *domain.User) error {
-	d := userDoc{ID: primitive.NewObjectID(), Username: u.Username, Password: u.Password, CreatedAt: u.CreatedAt}
+	d := userDoc{ID: primitive.NewObjectID(), Username: u.Username, Password: u.Password, IsAdmin: u.IsAdmin, CreatedAt: u.CreatedAt}
 	_, e := r.db.Users.InsertOne(ctx, d)
 	if e == nil {
 		u.ID = d.ID.Hex()

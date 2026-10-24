@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -41,6 +42,34 @@ func (a *Auth) Register(ctx context.Context, username, password string) error {
 	err = a.users.Create(ctx, &domain.User{Username: username, Password: string(hash), CreatedAt: time.Now().UTC()})
 	if errors.Is(err, domain.ErrDuplicate) {
 		return domain.ErrUsernameExists
+	}
+	return err
+}
+
+// BootstrapAdmin creates the configured admin once. An existing username is
+// never promoted or assigned a new password by a server restart.
+func (a *Auth) BootstrapAdmin(ctx context.Context, username, password string) error {
+	username = strings.TrimSpace(username)
+	if username == "" || len(password) < 8 {
+		return domain.ErrInvalidCredentials
+	}
+	u, err := a.users.ByUsername(ctx, username)
+	if err == nil {
+		if !u.IsAdmin || bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)) != nil {
+			return fmt.Errorf("tài khoản bootstrap admin đã tồn tại nhưng không khớp cấu hình")
+		}
+		return nil
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	err = a.users.Create(ctx, &domain.User{Username: username, Password: string(hash), IsAdmin: true, CreatedAt: time.Now().UTC()})
+	if errors.Is(err, domain.ErrDuplicate) {
+		return fmt.Errorf("tài khoản bootstrap admin vừa được tạo bởi tiến trình khác")
 	}
 	return err
 }

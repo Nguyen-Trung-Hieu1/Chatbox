@@ -41,13 +41,21 @@ test('shows the account plan below the username', () => {
   expect(screen.getByText('9.750')).toBeInTheDocument();
 });
 
-test('shows the upgrade button for free accounts', () => {
-  const { props } = renderSidebar({ plan: 'free', creditResetAt: '2026-10-20T02:00:00Z', now: Date.parse('2026-10-20T00:00:00Z'), onUpgrade: jest.fn() });
+test('shows admin page only for admin accounts', () => {
+  const onOpenAdmin = jest.fn();
+  const view = renderSidebar({ isAdmin: false, onOpenAdmin });
+  expect(screen.queryByText('Trang quản trị')).not.toBeInTheDocument();
+  view.rerender(<Sidebar {...view.props} isAdmin onOpenAdmin={onOpenAdmin} />);
+  fireEvent.click(screen.getByText('Trang quản trị'));
+  expect(onOpenAdmin).toHaveBeenCalledTimes(1);
+});
+
+test('shows credit reset but no self-service upgrade for free accounts', () => {
+  renderSidebar({ plan: 'free', creditResetAt: '2026-10-20T02:00:00Z', now: Date.parse('2026-10-20T00:00:00Z') });
   fireEvent.click(screen.getByText('Xem chi tiết gói'));
   expect(screen.getByText('Reset credit sau')).toBeInTheDocument();
   expect(screen.getByText('2 giờ 0 phút')).toBeInTheDocument();
-  fireEvent.click(screen.getByText('Nâng gói Paid (2 ngày)'));
-  expect(props.onUpgrade).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText('Nâng gói Paid (2 ngày)')).not.toBeInTheDocument();
 });
 
 test('shows remaining time and credit reset for paid accounts', () => {

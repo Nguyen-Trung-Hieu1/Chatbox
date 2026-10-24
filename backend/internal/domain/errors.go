@@ -15,4 +15,5 @@ var (
 	ErrQuotaExceeded      = errors.New("hạn mức còn lại không đủ cho yêu cầu này")
 	ErrInvalidContent     = errors.New("tin nhắn quá dài")
 	ErrInvalidAPIKeyName  = errors.New("tên API key phải có từ 1 đến 80 ký tự")
+	ErrInvalidPlan        = errors.New("gói phải là free hoặc paid")
 )

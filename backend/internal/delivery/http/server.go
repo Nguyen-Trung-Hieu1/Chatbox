@@ -26,7 +26,6 @@ type ChatUseCase interface {
 	Delete(context.Context, string, string) error
 	SendStream(context.Context, string, string, string, string, func(string) error) (*domain.Message, error)
 	Entitlement(context.Context, string) (*domain.Entitlement, error)
-	Upgrade(context.Context, string) (*domain.Entitlement, error)
 	UsageHistory(context.Context, string) ([]domain.UsageRecord, error)
 	APIGenerate(context.Context, string, string, []domain.AIMessage, int, bool, func(string) error) (domain.AIResult, error)
 }
@@ -40,12 +39,13 @@ type Server struct {
 	auth   AuthUseCase
 	chat   ChatUseCase
 	keys   APIKeyUseCase
+	admin  AdminUseCase
 	cookie string
 	secure bool
 }
 
-func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, cookie string, secure bool) *Server {
-	return &Server{auth: auth, chat: chat, keys: keys, cookie: cookie, secure: secure}
+func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, admin AdminUseCase, cookie string, secure bool) *Server {
+	return &Server{auth: auth, chat: chat, keys: keys, admin: admin, cookie: cookie, secure: secure}
 }
 
 type contextKey int
@@ -71,7 +71,9 @@ func fail(w http.ResponseWriter, e error) {
 		status = 403
 	case errors.Is(e, domain.ErrQuotaExceeded):
 		status = 402
-	case errors.Is(e, domain.ErrInvalidContent), errors.Is(e, domain.ErrInvalidAPIKeyName):
+	case errors.Is(e, domain.ErrNotFound):
+		status = 404
+	case errors.Is(e, domain.ErrInvalidContent), errors.Is(e, domain.ErrInvalidAPIKeyName), errors.Is(e, domain.ErrInvalidPlan):
 		status = 400
 	}
 	jsonOut(w, status, map[string]string{"error": e.Error()})
@@ -113,9 +115,11 @@ func (s *Server) Handler(origin string) http.Handler {
 	mux.Handle("/api/history", s.authn(method("GET", s.history)))
 	mux.Handle("/api/chat", s.authn(method("POST", s.send)))
 	mux.Handle("/api/entitlement", s.authn(method("GET", s.entitlement)))
-	mux.Handle("/api/upgrade", s.authn(method("POST", s.upgrade)))
 	mux.Handle("/api/usage", s.authn(method("GET", s.usage)))
 	mux.Handle("/api/keys", s.authn(http.HandlerFunc(s.manageKeys)))
+	mux.Handle("/api/admin/users", s.authn(s.adminOnly(method("GET", s.adminUsers))))
+	mux.Handle("/api/admin/usage", s.authn(s.adminOnly(method("GET", s.adminUsage))))
+	mux.Handle("/api/admin/plan", s.authn(s.adminOnly(method("PATCH", s.adminSetPlan))))
 	mux.Handle("/v1/models", s.apiAuth(method("GET", s.openAIModels)))
 	mux.Handle("/v1/chat/completions", s.apiAuth(method("POST", s.openAIChat)))
 	mux.Handle("/v1/completions", s.apiAuth(method("POST", s.openAICompletions)))
@@ -171,7 +175,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	logEvent(r, "info", "login_success", map[string]any{"user_id": u.ID})
 	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: token, Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode})
-	jsonOut(w, 200, map[string]any{"message": "Đăng nhập thành công!", "user": map[string]string{"id": u.ID, "username": u.Username}})
+	jsonOut(w, 200, map[string]any{"message": "Đăng nhập thành công!", "user": map[string]any{"id": u.ID, "username": u.Username, "is_admin": u.IsAdmin}})
 }
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, e := r.Cookie(s.cookie); e == nil {
@@ -183,18 +187,10 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	u := user(r.Context())
-	jsonOut(w, 200, map[string]string{"id": u.ID, "username": u.Username})
+	jsonOut(w, 200, map[string]any{"id": u.ID, "username": u.Username, "is_admin": u.IsAdmin})
 }
 func (s *Server) entitlement(w http.ResponseWriter, r *http.Request) {
 	e, err := s.chat.Entitlement(r.Context(), user(r.Context()).ID)
-	if err != nil {
-		fail(w, err)
-		return
-	}
-	jsonOut(w, 200, e)
-}
-func (s *Server) upgrade(w http.ResponseWriter, r *http.Request) {
-	e, err := s.chat.Upgrade(r.Context(), user(r.Context()).ID)
 	if err != nil {
 		fail(w, err)
 		return
