@@ -3,11 +3,13 @@ package domain
 import "time"
 
 type User struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"`
-	IsAdmin   bool      `json:"is_admin"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          string    `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name,omitempty"`
+	Password    string    `json:"-"`
+	KeycloakSub string    `json:"-"`
+	IsAdmin     bool      `json:"is_admin"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Session struct {

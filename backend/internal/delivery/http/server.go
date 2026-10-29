@@ -17,6 +17,7 @@ type AuthUseCase interface {
 	Login(context.Context, string, string) (string, *domain.User, error)
 	Authenticate(context.Context, string) (*domain.User, error)
 	Logout(context.Context, string) error
+	LoginKeycloak(context.Context, string, string, string) (string, *domain.User, error)
 }
 type ChatUseCase interface {
 	CreateConversation(context.Context, string, string) (*domain.Conversation, error)
@@ -36,16 +37,21 @@ type APIKeyUseCase interface {
 	Authenticate(context.Context, string) (*domain.User, error)
 }
 type Server struct {
-	auth   AuthUseCase
-	chat   ChatUseCase
-	keys   APIKeyUseCase
-	admin  AdminUseCase
-	cookie string
-	secure bool
+	auth     AuthUseCase
+	chat     ChatUseCase
+	keys     APIKeyUseCase
+	admin    AdminUseCase
+	cookie   string
+	secure   bool
+	keycloak *keycloakVerifier
 }
 
-func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, admin AdminUseCase, cookie string, secure bool) *Server {
-	return &Server{auth: auth, chat: chat, keys: keys, admin: admin, cookie: cookie, secure: secure}
+func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, admin AdminUseCase, cookie string, secure bool, keycloakConfig ...string) *Server {
+	s := &Server{auth: auth, chat: chat, keys: keys, admin: admin, cookie: cookie, secure: secure}
+	if len(keycloakConfig) == 2 {
+		s.keycloak = newKeycloakVerifier(keycloakConfig[0], keycloakConfig[1])
+	}
+	return s
 }
 
 type contextKey int
@@ -109,6 +115,7 @@ func (s *Server) Handler(origin string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/register", method("POST", s.register))
 	mux.HandleFunc("/api/login", method("POST", s.login))
+	mux.HandleFunc("/api/keycloak/login", method("POST", s.keycloakLogin))
 	mux.HandleFunc("/api/logout", method("POST", s.logout))
 	mux.Handle("/api/me", s.authn(method("GET", s.me)))
 	mux.Handle("/api/conversations", s.authn(http.HandlerFunc(s.conversations)))
@@ -146,6 +153,10 @@ type credentials struct {
 }
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
+	if s.keycloak != nil {
+		jsonOut(w, http.StatusGone, map[string]string{"error": "Đăng ký đã chuyển sang Keycloak"})
+		return
+	}
 	var in credentials
 	if decode(r, &in) != nil {
 		logEvent(r, "warn", "register_failed", map[string]any{"reason": "invalid_input"})
@@ -177,6 +188,34 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: token, Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode})
 	jsonOut(w, 200, map[string]any{"message": "Đăng nhập thành công!", "user": map[string]any{"id": u.ID, "username": u.Username, "is_admin": u.IsAdmin}})
 }
+
+func (s *Server) keycloakLogin(w http.ResponseWriter, r *http.Request) {
+	if s.keycloak == nil {
+		jsonOut(w, 503, map[string]string{"error": "Keycloak chưa được cấu hình"})
+		return
+	}
+	var in struct {
+		IDToken string `json:"id_token"`
+		Nonce   string `json:"nonce"`
+	}
+	if decode(r, &in) != nil {
+		jsonOut(w, 400, map[string]string{"error": "dữ liệu không hợp lệ"})
+		return
+	}
+	identity, err := s.keycloak.verifyIDToken(in.IDToken, in.Nonce)
+	if err != nil {
+		logEvent(r, "warn", "keycloak_login_failed", map[string]any{"reason": "invalid_token"})
+		fail(w, domain.ErrUnauthorized)
+		return
+	}
+	token, u, err := s.auth.LoginKeycloak(r.Context(), identity.Subject, identity.Username, identity.DisplayName)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: token, Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
+	jsonOut(w, 200, map[string]any{"user": map[string]any{"id": u.ID, "username": u.Username, "display_name": u.DisplayName, "is_admin": u.IsAdmin}})
+}
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, e := r.Cookie(s.cookie); e == nil {
 		_ = s.auth.Logout(r.Context(), c.Value)
@@ -187,7 +226,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	u := user(r.Context())
-	jsonOut(w, 200, map[string]any{"id": u.ID, "username": u.Username, "is_admin": u.IsAdmin})
+	jsonOut(w, 200, map[string]any{"id": u.ID, "username": u.Username, "display_name": u.DisplayName, "is_admin": u.IsAdmin})
 }
 func (s *Server) entitlement(w http.ResponseWriter, r *http.Request) {
 	e, err := s.chat.Entitlement(r.Context(), user(r.Context()).ID)

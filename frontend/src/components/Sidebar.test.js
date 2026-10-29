@@ -41,6 +41,12 @@ test('shows the account plan below the username', () => {
   expect(screen.getByText('9.750')).toBeInTheDocument();
 });
 
+test('shows the Keycloak full name instead of an internal account id', () => {
+  renderSidebar({ currentUser: { username: 'kc-subject-1', display_name: 'An Nguyen' } });
+  expect(screen.getByText('An Nguyen')).toBeInTheDocument();
+  expect(screen.queryByText('kc-subject-1')).not.toBeInTheDocument();
+});
+
 test('shows admin page only for admin accounts', () => {
   const onOpenAdmin = jest.fn();
   const view = renderSidebar({ isAdmin: false, onOpenAdmin });

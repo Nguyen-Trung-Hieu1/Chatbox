@@ -17,6 +17,7 @@ type Config struct {
 	TokenBudget                                                                           int
 	FreeCredits                                                                           int64
 	AdminBootstrapUsername, AdminBootstrapPassword                                        string
+	KeycloakIssuer, KeycloakClientID                                                      string
 	FreeModels, PaidModels                                                                []Model
 }
 
@@ -36,6 +37,8 @@ func Load(files ...string) (Config, error) {
 	}
 	c := Config{MongoURI: value("MONGO_URI", "mongodb://localhost:27017"), MongoDatabase: value("MONGO_DATABASE", "Chatbox1"), AIEndpoint: value("AI_ENDPOINT", "http://localhost:20127/v1/chat/completions"), AIKey: os.Getenv("AI_API_KEY"), AIModel: value("AI_MODEL", "ag/claude-opus-4-6-thinking"), HTTPAddr: value("HTTP_ADDR", ":8080"), CORSOrigin: value("CORS_ORIGIN", "http://localhost:3000"), CookieName: value("SESSION_COOKIE_NAME", "chatbox_session"), CookieSecure: strings.EqualFold(value("COOKIE_SECURE", "false"), "true"), SessionTTL: time.Duration(integer("SESSION_TTL_HOURS", 24)) * time.Hour, TokenBudget: integer("AI_TOKEN_BUDGET", 6000), FreeCredits: int64(integer("FREE_INITIAL_CREDITS", 1000))}
 	c.AdminBootstrapUsername = os.Getenv("ADMIN_BOOTSTRAP_USERNAME")
+	c.KeycloakIssuer = value("KEYCLOAK_ISSUER", "https://auth.chatbox.cyou/realms/chatbox")
+	c.KeycloakClientID = value("KEYCLOAK_CLIENT_ID", "chatbox-web")
 	c.AdminBootstrapPassword = os.Getenv("ADMIN_BOOTSTRAP_PASSWORD")
 	if (c.AdminBootstrapUsername == "") != (c.AdminBootstrapPassword == "") || (c.AdminBootstrapUsername != "" && len(c.AdminBootstrapPassword) < 8) {
 		return Config{}, fmt.Errorf("cấu hình tài khoản admin không hợp lệ")

@@ -99,6 +99,10 @@ resource "aws_instance" "chatbox" {
   USERDATA
   user_data_replace_on_change = true
 
+  lifecycle {
+    ignore_changes = [ami, user_data]
+  }
+
   metadata_options {
     http_tokens                 = "required"
     http_put_response_hop_limit = 2

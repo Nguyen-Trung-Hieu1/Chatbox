@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Auth from './Auth';
+import { finishKeycloakLogin, logoutKeycloak } from './keycloak';
 import ChatHeader from './components/ChatHeader';
 import ChatView from './components/ChatView';
 import Sidebar from './components/Sidebar';
@@ -23,6 +24,7 @@ function rememberModel(userId, modelId) {
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [loginError, setLoginError] = useState('');
   const [conversations, setConversations] = useState([]);
   const [currentId, setCurrentId] = useState('');
   const [messages, setMessages] = useState([]);
@@ -36,6 +38,7 @@ function App() {
   const [showAdmin, setShowAdmin] = useState(() => window.location.pathname === '/admin');
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 768);
   const streamController = useRef(null);
+  const sessionCheckStarted = useRef(false);
 
   const stopGenerating = () => streamController.current?.abort();
   const resetToLogin = () => {
@@ -73,6 +76,15 @@ function App() {
 
   // Check the existing cookie-backed session once when the app starts.
   useEffect(() => {
+    if (sessionCheckStarted.current) return;
+    sessionCheckStarted.current = true;
+    if (window.location.pathname === '/auth/callback') {
+      finishKeycloakLogin(api)
+        .then((result) => setCurrentUser(result.user))
+        .catch((err) => { setLoginError(err.message); resetToLogin(); })
+        .finally(() => setCheckingSession(false));
+      return;
+    }
     api('/api/me')
       .then(setCurrentUser)
       .catch(resetToLogin)
@@ -109,6 +121,7 @@ function App() {
       // Clear the local session even when offline.
     } finally {
       resetToLogin();
+      logoutKeycloak();
     }
   };
   const changeModel = (modelId) => {
@@ -234,11 +247,11 @@ function App() {
     );
   }
   if (!currentUser) {
-    return <Auth onLoginSuccess={setCurrentUser} api={api} />;
+    return <Auth error={loginError} />;
   }
   if (showAdmin) {
     if (currentUser.is_admin) return <AdminDashboard onBack={() => navigateAdmin(false)} onLogout={handleLogout} />;
-    return <div className="admin-page"><div className="admin-denied"><h1>Không có quyền truy cập</h1><p>Tài khoản {currentUser.username} chưa được cấp quyền quản trị.</p><button type="button" onClick={() => navigateAdmin(false)}>Về Chatbox</button></div></div>;
+    return <div className="admin-page"><div className="admin-denied"><h1>Không có quyền truy cập</h1><p>Tài khoản {currentUser.display_name || currentUser.username} chưa được cấp quyền quản trị.</p><button type="button" onClick={() => navigateAdmin(false)}>Về Chatbox</button></div></div>;
   }
 
   return (

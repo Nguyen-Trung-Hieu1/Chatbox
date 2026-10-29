@@ -216,10 +216,10 @@ export default function Sidebar({
         <div className="account-wrap">
           <div className="account-row">
             <span className="avatar">
-              {currentUser.username.charAt(0).toUpperCase()}
+              {(currentUser.display_name || currentUser.username).charAt(0).toUpperCase()}
             </span>
             <span className="account-info">
-              <span className="account-name">{currentUser.username}</span>
+              <span className="account-name">{currentUser.display_name || currentUser.username}</span>
               {plan && (
                 <span className="account-plan">
                   {plan === 'paid' ? 'Paid' : 'Free'}

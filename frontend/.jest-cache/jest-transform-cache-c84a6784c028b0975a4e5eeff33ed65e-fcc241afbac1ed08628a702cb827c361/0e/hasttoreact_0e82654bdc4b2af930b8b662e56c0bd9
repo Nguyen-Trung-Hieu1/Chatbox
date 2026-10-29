@@ -1,0 +1,20 @@
+3d2354b2b9b6610e67862b54f1f63fd8
+{
+  "classId": "classID",
+  "dataType": "datatype",
+  "itemId": "itemID",
+  "strokeDashArray": "strokeDasharray",
+  "strokeDashOffset": "strokeDashoffset",
+  "strokeLineCap": "strokeLinecap",
+  "strokeLineJoin": "strokeLinejoin",
+  "strokeMiterLimit": "strokeMiterlimit",
+  "typeOf": "typeof",
+  "xLinkActuate": "xlinkActuate",
+  "xLinkArcRole": "xlinkArcrole",
+  "xLinkHref": "xlinkHref",
+  "xLinkRole": "xlinkRole",
+  "xLinkShow": "xlinkShow",
+  "xLinkTitle": "xlinkTitle",
+  "xLinkType": "xlinkType",
+  "xmlnsXLink": "xmlnsXlink"
+}

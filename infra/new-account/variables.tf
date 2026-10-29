@@ -13,7 +13,7 @@ variable "aws_region" {
 variable "instance_type" {
   description = "EC2 size. c7i-flex.large matches the former Chatbox server."
   type        = string
-  default     = "c7i-flex.large"
+  default     = "m7i-flex.large"
 }
 
 variable "name" {

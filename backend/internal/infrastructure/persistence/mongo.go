@@ -33,6 +33,9 @@ func (m *Mongo) ensureIndexes(ctx context.Context) error {
 	if _, err := m.Users.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "username", Value: 1}}, Options: &options.IndexOptions{Unique: &unique}}); err != nil {
 		return err
 	}
+	if _, err := m.Users.Indexes().CreateOne(ctx, mongo.IndexModel{Keys: bson.D{{Key: "keycloak_sub", Value: 1}}, Options: options.Index().SetUnique(true).SetPartialFilterExpression(bson.M{"keycloak_sub": bson.M{"$type": "string"}})}); err != nil {
+		return err
+	}
 	if _, err := m.Sessions.Indexes().CreateMany(ctx, []mongo.IndexModel{{Keys: bson.D{{Key: "token_hash", Value: 1}}, Options: &options.IndexOptions{Unique: &unique}}, {Keys: bson.D{{Key: "expires_at", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(0)}}); err != nil {
 		return err
 	}

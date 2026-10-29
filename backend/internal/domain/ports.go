@@ -9,6 +9,7 @@ type UserRepository interface {
 	Create(context.Context, *User) error
 	ByUsername(context.Context, string) (*User, error)
 	ByID(context.Context, string) (*User, error)
+	UpsertKeycloak(context.Context, string, string, string) (*User, error)
 }
 
 type SessionRepository interface {

@@ -8,15 +8,18 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"strings"
 	"time"
 )
 
 type userDoc struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty"`
-	Username  string             `bson:"username"`
-	Password  string             `bson:"password"`
-	IsAdmin   bool               `bson:"is_admin"`
-	CreatedAt time.Time          `bson:"created_at"`
+	ID          primitive.ObjectID `bson:"_id,omitempty"`
+	Username    string             `bson:"username"`
+	DisplayName string             `bson:"display_name,omitempty"`
+	Password    string             `bson:"password"`
+	KeycloakSub string             `bson:"keycloak_sub,omitempty"`
+	IsAdmin     bool               `bson:"is_admin"`
+	CreatedAt   time.Time          `bson:"created_at"`
 }
 type sessionDoc struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty"`
@@ -59,7 +62,7 @@ func mapErr(e error) error {
 	return e
 }
 func userEntity(d userDoc) *domain.User {
-	return &domain.User{ID: d.ID.Hex(), Username: d.Username, Password: d.Password, IsAdmin: d.IsAdmin, CreatedAt: d.CreatedAt}
+	return &domain.User{ID: d.ID.Hex(), Username: d.Username, DisplayName: d.DisplayName, Password: d.Password, KeycloakSub: d.KeycloakSub, IsAdmin: d.IsAdmin, CreatedAt: d.CreatedAt}
 }
 func conversationEntity(d conversationDoc) *domain.Conversation {
 	return &domain.Conversation{ID: d.ID.Hex(), OwnerID: d.OwnerID.Hex(), Title: d.Title, Summary: d.Summary, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}
@@ -92,6 +95,43 @@ func (r *UserRepository) ByID(ctx context.Context, v string) (*domain.User, erro
 	var d userDoc
 	e = r.db.Users.FindOne(ctx, bson.M{"_id": id}).Decode(&d)
 	return userEntity(d), mapErr(e)
+}
+
+func (r *UserRepository) UpsertKeycloak(ctx context.Context, sub, username, displayName string) (*domain.User, error) {
+	// The Keycloak subject is the identity key. Never link by a matching username.
+	filter := bson.M{"keycloak_sub": sub}
+	username = strings.TrimSpace(username)
+	displayName = strings.TrimSpace(displayName)
+	if chars := []rune(displayName); len(chars) > 80 {
+		displayName = string(chars[:80])
+	}
+	if displayName == "" {
+		displayName = username
+	}
+	// The login name is an internal key. A Google email can match an existing
+	// local username, so it must not be used as the MongoDB unique username.
+	d := userDoc{ID: primitive.NewObjectID(), Username: "kc-" + sub, KeycloakSub: sub, CreatedAt: time.Now().UTC()}
+	update := bson.M{"$setOnInsert": d}
+	if displayName != "" {
+		update["$set"] = bson.M{"display_name": displayName}
+	}
+	var found userDoc
+	err := r.db.Users.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)).Decode(&found)
+	if mongo.IsDuplicateKeyError(err) {
+		// A concurrent first login may have inserted the same subject.
+		if r.db.Users.FindOne(ctx, filter).Decode(&found) == nil {
+			return userEntity(found), nil
+		}
+		// A legacy local account may have claimed the internal name. Keep both
+		// accounts separate without changing either existing record.
+		d.Username = "kc-" + d.ID.Hex()
+		update["$setOnInsert"] = d
+		err = r.db.Users.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)).Decode(&found)
+	}
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	return userEntity(found), nil
 }
 
 type SessionRepository struct{ db *Mongo }

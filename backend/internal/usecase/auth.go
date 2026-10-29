@@ -79,7 +79,24 @@ func (a *Auth) Login(ctx context.Context, username, password string) (string, *d
 	if err != nil || bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)) != nil {
 		return "", nil, domain.ErrInvalidCredentials
 	}
+	return a.newSession(ctx, u)
+}
+
+func (a *Auth) LoginKeycloak(ctx context.Context, sub, username, displayName string) (string, *domain.User, error) {
+	if sub == "" {
+		return "", nil, domain.ErrInvalidCredentials
+	}
+	// A distinct namespace prevents an existing local username from being claimed.
+	u, err := a.users.UpsertKeycloak(ctx, sub, username, displayName)
+	if err != nil {
+		return "", nil, err
+	}
+	return a.newSession(ctx, u)
+}
+
+func (a *Auth) newSession(ctx context.Context, u *domain.User) (string, *domain.User, error) {
 	raw := make([]byte, 32)
+	var err error
 	if _, err = rand.Read(raw); err != nil {
 		return "", nil, err
 	}
