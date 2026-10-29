@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import LogoMark from './LogoMark';
 import { ComposeIcon, MoreIcon, SearchIcon, SidebarIcon, TrashIcon } from './icons';
-import { keycloakAccountURL } from '../keycloak';
 
 export default function Sidebar({
   conversations,
@@ -29,6 +28,7 @@ export default function Sidebar({
   const [draftTitle, setDraftTitle] = useState('');
   const [actionError, setActionError] = useState('');
   const [showAccountDetails, setShowAccountDetails] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const menuRef = useRef(null);
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase('vi');
@@ -231,7 +231,13 @@ export default function Sidebar({
               Logout
             </button>
           </div>
-          <a className="account-profile-link" href={keycloakAccountURL} target="_blank" rel="noopener noreferrer">Thông tin tài khoản</a>
+          <button type="button" className="account-profile-link" aria-expanded={showProfile} onClick={() => setShowProfile((current) => !current)}>Thông tin cá nhân</button>
+          {showProfile && <div className="account-profile" aria-label="Thông tin cá nhân">
+            <div><span>Họ và tên</span><strong>{currentUser.display_name || 'Chưa cập nhật'}</strong></div>
+            <div><span>Họ</span><strong>{currentUser.last_name || 'Chưa cập nhật'}</strong></div>
+            <div><span>Tên</span><strong>{currentUser.first_name || 'Chưa cập nhật'}</strong></div>
+            <div><span>Email</span><strong>{currentUser.email || 'Chưa cập nhật'}</strong></div>
+          </div>}
           <button type="button" className="account-details-toggle" aria-expanded={showAccountDetails} onClick={() => setShowAccountDetails((current) => !current)}>
             <span>{showAccountDetails ? 'Ẩn chi tiết gói' : 'Xem chi tiết gói'}</span><span aria-hidden="true">{showAccountDetails ? '⌃' : '⌄'}</span>
           </button>

@@ -47,10 +47,12 @@ test('shows the Keycloak full name instead of an internal account id', () => {
   expect(screen.queryByText('kc-subject-1')).not.toBeInTheDocument();
 });
 
-test('links to the Keycloak account console', () => {
-  renderSidebar();
-  expect(screen.getByRole('link', { name: 'Thông tin tài khoản' }))
-    .toHaveAttribute('href', 'https://auth.chatbox.cyou/realms/chatbox/account/');
+test('shows personal information inside Chatbox', () => {
+  renderSidebar({ currentUser: { username: 'kc-subject-1', display_name: 'An Nguyen', first_name: 'An', last_name: 'Nguyen', email: 'an@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Thông tin cá nhân' }));
+  expect(screen.getByText('an@example.com')).toBeInTheDocument();
+  expect(screen.getByText('Nguyen')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Thông tin tài khoản' })).not.toBeInTheDocument();
 });
 
 test('shows admin page only for admin accounts', () => {

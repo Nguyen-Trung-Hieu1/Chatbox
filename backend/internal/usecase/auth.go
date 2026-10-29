@@ -82,12 +82,12 @@ func (a *Auth) Login(ctx context.Context, username, password string) (string, *d
 	return a.newSession(ctx, u)
 }
 
-func (a *Auth) LoginKeycloak(ctx context.Context, sub, username, displayName string) (string, *domain.User, error) {
+func (a *Auth) LoginKeycloak(ctx context.Context, sub, username, displayName, email, firstName, lastName string) (string, *domain.User, error) {
 	if sub == "" {
 		return "", nil, domain.ErrInvalidCredentials
 	}
 	// A distinct namespace prevents an existing local username from being claimed.
-	u, err := a.users.UpsertKeycloak(ctx, sub, username, displayName)
+	u, err := a.users.UpsertKeycloak(ctx, sub, username, displayName, email, firstName, lastName)
 	if err != nil {
 		return "", nil, err
 	}

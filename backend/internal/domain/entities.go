@@ -6,6 +6,9 @@ type User struct {
 	ID          string    `json:"id"`
 	Username    string    `json:"username"`
 	DisplayName string    `json:"display_name,omitempty"`
+	Email       string    `json:"email,omitempty"`
+	FirstName   string    `json:"first_name,omitempty"`
+	LastName    string    `json:"last_name,omitempty"`
 	Password    string    `json:"-"`
 	KeycloakSub string    `json:"-"`
 	IsAdmin     bool      `json:"is_admin"`

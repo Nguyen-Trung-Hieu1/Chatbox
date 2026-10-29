@@ -17,7 +17,7 @@ type AuthUseCase interface {
 	Login(context.Context, string, string) (string, *domain.User, error)
 	Authenticate(context.Context, string) (*domain.User, error)
 	Logout(context.Context, string) error
-	LoginKeycloak(context.Context, string, string, string) (string, *domain.User, error)
+	LoginKeycloak(context.Context, string, string, string, string, string, string) (string, *domain.User, error)
 }
 type ChatUseCase interface {
 	CreateConversation(context.Context, string, string) (*domain.Conversation, error)
@@ -208,13 +208,13 @@ func (s *Server) keycloakLogin(w http.ResponseWriter, r *http.Request) {
 		fail(w, domain.ErrUnauthorized)
 		return
 	}
-	token, u, err := s.auth.LoginKeycloak(r.Context(), identity.Subject, identity.Username, identity.DisplayName)
+	token, u, err := s.auth.LoginKeycloak(r.Context(), identity.Subject, identity.Username, identity.DisplayName, identity.Email, identity.FirstName, identity.LastName)
 	if err != nil {
 		fail(w, err)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: token, Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
-	jsonOut(w, 200, map[string]any{"user": map[string]any{"id": u.ID, "username": u.Username, "display_name": u.DisplayName, "is_admin": u.IsAdmin}})
+	jsonOut(w, 200, map[string]any{"user": u})
 }
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if c, e := r.Cookie(s.cookie); e == nil {
@@ -226,7 +226,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	u := user(r.Context())
-	jsonOut(w, 200, map[string]any{"id": u.ID, "username": u.Username, "display_name": u.DisplayName, "is_admin": u.IsAdmin})
+	jsonOut(w, 200, u)
 }
 func (s *Server) entitlement(w http.ResponseWriter, r *http.Request) {
 	e, err := s.chat.Entitlement(r.Context(), user(r.Context()).ID)

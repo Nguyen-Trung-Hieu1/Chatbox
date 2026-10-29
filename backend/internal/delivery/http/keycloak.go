@@ -21,7 +21,7 @@ type keycloakVerifier struct {
 	client   *http.Client
 }
 
-type keycloakIdentity struct{ Subject, Username, DisplayName string }
+type keycloakIdentity struct{ Subject, Username, DisplayName, Email, FirstName, LastName string }
 
 func newKeycloakVerifier(issuer, clientID string) *keycloakVerifier {
 	if issuer == "" || clientID == "" {
@@ -61,6 +61,7 @@ func (v *keycloakVerifier) verifyIDToken(token, expectedNonce string) (keycloakI
 		GivenName         string          `json:"given_name"`
 		FamilyName        string          `json:"family_name"`
 		Name              string          `json:"name"`
+		Email             string          `json:"email"`
 	}
 	if jwtPart(parts[1], &claims) != nil {
 		return keycloakIdentity{}, errors.New("invalid token claims")
@@ -139,7 +140,7 @@ func (v *keycloakVerifier) verifyIDToken(token, expectedNonce string) (keycloakI
 		if displayName == "" {
 			displayName = strings.TrimSpace(claims.Name)
 		}
-		return keycloakIdentity{Subject: claims.Subject, Username: claims.PreferredUsername, DisplayName: displayName}, nil
+		return keycloakIdentity{Subject: claims.Subject, Username: claims.PreferredUsername, DisplayName: displayName, Email: claims.Email, FirstName: claims.GivenName, LastName: claims.FamilyName}, nil
 	}
 	return keycloakIdentity{}, errors.New("signing key not found")
 }

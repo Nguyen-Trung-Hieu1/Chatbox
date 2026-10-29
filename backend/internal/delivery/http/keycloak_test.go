@@ -34,7 +34,7 @@ func TestKeycloakIDTokenVerification(t *testing.T) {
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(body))), Header: make(http.Header)}, nil
 	})
-	claims := map[string]any{"iss": issuer, "sub": "subject-1", "aud": "chatbox-web", "exp": time.Now().Add(time.Minute).Unix(), "iat": time.Now().Unix(), "nonce": "nonce-1", "email_verified": true, "preferred_username": "alice", "given_name": "An", "family_name": "Nguyen"}
+	claims := map[string]any{"iss": issuer, "sub": "subject-1", "aud": "chatbox-web", "exp": time.Now().Add(time.Minute).Unix(), "iat": time.Now().Unix(), "nonce": "nonce-1", "email_verified": true, "preferred_username": "alice", "given_name": "An", "family_name": "Nguyen", "email": "an@example.com"}
 	sign := func(c map[string]any) string {
 		input := enc(map[string]any{"alg": "RS256", "kid": "key-1"}) + "." + enc(c)
 		h := sha256.Sum256([]byte(input))
@@ -45,7 +45,7 @@ func TestKeycloakIDTokenVerification(t *testing.T) {
 		return input + "." + base64.RawURLEncoding.EncodeToString(sig)
 	}
 	identity, err := verifier.verifyIDToken(sign(claims), "nonce-1")
-	if err != nil || identity.Subject != "subject-1" || identity.Username != "alice" || identity.DisplayName != "An Nguyen" {
+	if err != nil || identity.Subject != "subject-1" || identity.Username != "alice" || identity.DisplayName != "An Nguyen" || identity.Email != "an@example.com" {
 		t.Fatalf("valid token rejected: %+v %v", identity, err)
 	}
 	if _, err := verifier.verifyIDToken(sign(claims), "other-nonce"); err == nil {
