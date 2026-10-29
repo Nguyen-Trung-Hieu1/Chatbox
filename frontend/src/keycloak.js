@@ -1,5 +1,6 @@
 const issuer = (process.env.REACT_APP_KEYCLOAK_ISSUER || 'https://auth.chatbox.cyou/realms/chatbox').replace(/\/$/, '');
 const clientId = process.env.REACT_APP_KEYCLOAK_CLIENT_ID || 'chatbox-web';
+export const keycloakAccountURL = `${issuer}/account/`;
 const callbackURL = `${window.location.origin}/auth/callback`;
 const pendingKey = 'chatbox:oidc:pending';
 

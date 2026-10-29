@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import LogoMark from './LogoMark';
 import { ComposeIcon, MoreIcon, SearchIcon, SidebarIcon, TrashIcon } from './icons';
+import { keycloakAccountURL } from '../keycloak';
 
 export default function Sidebar({
   conversations,
@@ -230,6 +231,7 @@ export default function Sidebar({
               Logout
             </button>
           </div>
+          <a className="account-profile-link" href={keycloakAccountURL} target="_blank" rel="noopener noreferrer">Thông tin tài khoản</a>
           <button type="button" className="account-details-toggle" aria-expanded={showAccountDetails} onClick={() => setShowAccountDetails((current) => !current)}>
             <span>{showAccountDetails ? 'Ẩn chi tiết gói' : 'Xem chi tiết gói'}</span><span aria-hidden="true">{showAccountDetails ? '⌃' : '⌄'}</span>
           </button>

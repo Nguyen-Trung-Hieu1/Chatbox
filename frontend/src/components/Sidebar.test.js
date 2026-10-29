@@ -47,6 +47,12 @@ test('shows the Keycloak full name instead of an internal account id', () => {
   expect(screen.queryByText('kc-subject-1')).not.toBeInTheDocument();
 });
 
+test('links to the Keycloak account console', () => {
+  renderSidebar();
+  expect(screen.getByRole('link', { name: 'Thông tin tài khoản' }))
+    .toHaveAttribute('href', 'https://auth.chatbox.cyou/realms/chatbox/account/');
+});
+
 test('shows admin page only for admin accounts', () => {
   const onOpenAdmin = jest.fn();
   const view = renderSidebar({ isAdmin: false, onOpenAdmin });
