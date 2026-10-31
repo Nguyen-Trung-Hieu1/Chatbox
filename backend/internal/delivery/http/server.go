@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"net/http"
 	"strings"
@@ -104,12 +105,24 @@ func method(m string, h http.HandlerFunc) http.HandlerFunc {
 }
 func (s *Server) authn(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.keycloak == nil {
+		cookie, err := r.Cookie(s.cookie)
+		if err != nil || cookie.Value == "" {
 			fail(w, domain.ErrUnauthorized)
 			return
 		}
-		cookie, err := r.Cookie(s.cookie)
-		if err != nil || cookie.Value == "" {
+		if s.keycloak == nil || s.sessions == nil {
+			fail(w, domain.ErrUnauthorized)
+			return
+		}
+		if _, err := s.sessions.Get(r.Context(), cookie.Value); errors.Is(err, mongo.ErrNoDocuments) {
+			u, legacyErr := s.auth.Authenticate(r.Context(), cookie.Value)
+			if legacyErr != nil {
+				fail(w, domain.ErrUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
+			return
+		} else if err != nil {
 			fail(w, domain.ErrUnauthorized)
 			return
 		}
@@ -135,6 +148,7 @@ func (s *Server) Handler(origin string) http.Handler {
 	s.origin = strings.TrimRight(origin, "/")
 	mux := http.NewServeMux()
 	mux.Handle("/api/auth/exchange", method("POST", s.exchangeKeycloakCode))
+	mux.Handle("/api/auth/legacy-login", method("POST", s.legacyLogin))
 	mux.Handle("/api/auth/logout", method("POST", s.logoutKeycloakSession))
 	mux.Handle("/api/me", s.authn(method("GET", s.me)))
 	mux.Handle("/api/conversations", s.authn(http.HandlerFunc(s.conversations)))
@@ -214,6 +228,25 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	logEvent(r, "info", "login_success", map[string]any{"user_id": u.ID})
 	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: token, Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode})
 	jsonOut(w, 200, map[string]any{"message": "Đăng nhập thành công!", "user": map[string]any{"id": u.ID, "username": u.Username, "is_admin": u.IsAdmin}})
+}
+
+func (s *Server) legacyLogin(w http.ResponseWriter, r *http.Request) {
+	if s.keycloak == nil || s.sessions == nil {
+		fail(w, domain.ErrUnauthorized)
+		return
+	}
+	var in credentials
+	if decode(r, &in) != nil || len(in.Username) > 256 || len(in.Password) > 1024 || strings.TrimSpace(in.Username) == "" || in.Password == "" {
+		fail(w, domain.ErrInvalidCredentials)
+		return
+	}
+	token, u, err := s.auth.Login(r.Context(), in.Username, in.Password)
+	if err != nil {
+		fail(w, domain.ErrInvalidCredentials)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: token, Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode})
+	jsonOut(w, http.StatusOK, map[string]any{"user": u})
 }
 
 func (s *Server) keycloakLogin(w http.ResponseWriter, r *http.Request) {

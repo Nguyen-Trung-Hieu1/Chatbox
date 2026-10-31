@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"net/http"
 	"net/url"
@@ -134,7 +135,12 @@ func (s *Server) activeSession(ctx context.Context, sessionID string) (persisten
 
 func (s *Server) logoutKeycloakSession(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(s.cookie); err == nil && s.sessions != nil {
-		if value, err := s.sessions.Get(r.Context(), c.Value); err == nil && s.keycloak != nil {
+		if value, err := s.sessions.Get(r.Context(), c.Value); errors.Is(err, mongo.ErrNoDocuments) {
+			_ = s.auth.Logout(r.Context(), c.Value)
+			http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: "", Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+			jsonOut(w, 200, map[string]string{"logout_url": s.origin + "/"})
+			return
+		} else if err == nil && s.keycloak != nil {
 			values := url.Values{"client_id": {s.keycloak.clientID}, "token": {value.RefreshToken}, "token_type_hint": {"refresh_token"}}
 			req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.keycloak.issuer+"/protocol/openid-connect/revoke", strings.NewReader(values.Encode()))
 			if err == nil {
