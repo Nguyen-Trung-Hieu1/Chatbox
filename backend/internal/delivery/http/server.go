@@ -2,6 +2,7 @@ package httpdelivery
 
 import (
 	"backend/internal/domain"
+	"backend/internal/infrastructure/persistence"
 	"backend/internal/usecase"
 	"context"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -18,6 +20,7 @@ type AuthUseCase interface {
 	Authenticate(context.Context, string) (*domain.User, error)
 	Logout(context.Context, string) error
 	LoginKeycloak(context.Context, string, string, string, string, string, string) (string, *domain.User, error)
+	ResolveKeycloak(context.Context, string, string, string, string, string, string) (*domain.User, error)
 }
 type ChatUseCase interface {
 	CreateConversation(context.Context, string, string) (*domain.Conversation, error)
@@ -37,17 +40,20 @@ type APIKeyUseCase interface {
 	Authenticate(context.Context, string) (*domain.User, error)
 }
 type Server struct {
-	auth     AuthUseCase
-	chat     ChatUseCase
-	keys     APIKeyUseCase
-	admin    AdminUseCase
-	cookie   string
-	secure   bool
-	keycloak *keycloakVerifier
+	auth      AuthUseCase
+	chat      ChatUseCase
+	keys      APIKeyUseCase
+	admin     AdminUseCase
+	cookie    string
+	secure    bool
+	keycloak  *keycloakVerifier
+	sessions  *persistence.KeycloakSessionStore
+	refreshMu sync.Mutex
+	origin    string
 }
 
-func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, admin AdminUseCase, cookie string, secure bool, keycloakConfig ...string) *Server {
-	s := &Server{auth: auth, chat: chat, keys: keys, admin: admin, cookie: cookie, secure: secure}
+func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, admin AdminUseCase, sessions *persistence.KeycloakSessionStore, cookie string, secure bool, keycloakConfig ...string) *Server {
+	s := &Server{auth: auth, chat: chat, keys: keys, admin: admin, sessions: sessions, cookie: cookie, secure: secure}
 	if len(keycloakConfig) == 2 {
 		s.keycloak = newKeycloakVerifier(keycloakConfig[0], keycloakConfig[1])
 	}
@@ -98,25 +104,38 @@ func method(m string, h http.HandlerFunc) http.HandlerFunc {
 }
 func (s *Server) authn(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, e := r.Cookie(s.cookie)
+		if s.keycloak == nil {
+			fail(w, domain.ErrUnauthorized)
+			return
+		}
+		cookie, err := r.Cookie(s.cookie)
+		if err != nil || cookie.Value == "" {
+			fail(w, domain.ErrUnauthorized)
+			return
+		}
+		tokens, e := s.activeSession(r.Context(), cookie.Value)
 		if e != nil {
 			fail(w, domain.ErrUnauthorized)
 			return
 		}
-		u, e := s.auth.Authenticate(r.Context(), c.Value)
+		identity, e := s.keycloak.verifyAccessToken(tokens.AccessToken)
 		if e != nil {
 			fail(w, domain.ErrUnauthorized)
+			return
+		}
+		u, e := s.auth.ResolveKeycloak(r.Context(), identity.Subject, identity.Username, identity.DisplayName, identity.Email, identity.FirstName, identity.LastName)
+		if e != nil {
+			fail(w, e)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
 	})
 }
 func (s *Server) Handler(origin string) http.Handler {
+	s.origin = strings.TrimRight(origin, "/")
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/register", method("POST", s.register))
-	mux.HandleFunc("/api/login", method("POST", s.login))
-	mux.HandleFunc("/api/keycloak/login", method("POST", s.keycloakLogin))
-	mux.HandleFunc("/api/logout", method("POST", s.logout))
+	mux.Handle("/api/auth/exchange", method("POST", s.exchangeKeycloakCode))
+	mux.Handle("/api/auth/logout", method("POST", s.logoutKeycloakSession))
 	mux.Handle("/api/me", s.authn(method("GET", s.me)))
 	mux.Handle("/api/conversations", s.authn(http.HandlerFunc(s.conversations)))
 	mux.Handle("/api/history", s.authn(method("GET", s.history)))
@@ -140,7 +159,15 @@ func cors(origin string, next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Add("Vary", "Origin")
 		if r.Method == "OPTIONS" {
+			if strings.HasPrefix(r.URL.Path, "/api/") && r.Header.Get("Origin") != origin {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 			w.WriteHeader(204)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("Origin") != origin {
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)

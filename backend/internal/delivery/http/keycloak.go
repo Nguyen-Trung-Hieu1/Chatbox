@@ -39,8 +39,16 @@ func jwtPart(part string, out any) error {
 }
 
 func (v *keycloakVerifier) verifyIDToken(token, expectedNonce string) (keycloakIdentity, error) {
+	return v.verifyToken(token, expectedNonce, false)
+}
+
+func (v *keycloakVerifier) verifyAccessToken(token string) (keycloakIdentity, error) {
+	return v.verifyToken(token, "", true)
+}
+
+func (v *keycloakVerifier) verifyToken(token, expectedNonce string, access bool) (keycloakIdentity, error) {
 	parts := strings.Split(token, ".")
-	if len(parts) != 3 || len(token) > 16000 || expectedNonce == "" {
+	if len(parts) != 3 || len(token) > 16000 || (!access && expectedNonce == "") {
 		return keycloakIdentity{}, errors.New("invalid id token")
 	}
 	var header struct {
@@ -62,32 +70,39 @@ func (v *keycloakVerifier) verifyIDToken(token, expectedNonce string) (keycloakI
 		FamilyName        string          `json:"family_name"`
 		Name              string          `json:"name"`
 		Email             string          `json:"email"`
+		AuthorizedParty   string          `json:"azp"`
+		Type              string          `json:"typ"`
 	}
 	if jwtPart(parts[1], &claims) != nil {
 		return keycloakIdentity{}, errors.New("invalid token claims")
 	}
 	now := time.Now().Unix()
-	if claims.Issuer != v.issuer || claims.Subject == "" || claims.Nonce != expectedNonce || claims.Expires <= now || claims.Issued > now+60 || claims.Issued < now-300 {
+	if claims.Issuer != v.issuer || claims.Subject == "" || (!access && claims.Nonce != expectedNonce) || claims.Expires <= now || claims.Issued > now+60 || claims.Issued <= 0 {
 		return keycloakIdentity{}, errors.New("token claims rejected")
 	}
-	var audience string
-	if json.Unmarshal(claims.Audience, &audience) == nil {
-		if audience != v.clientID {
-			return keycloakIdentity{}, errors.New("wrong token audience")
-		}
-	} else {
-		var audiences []string
-		if json.Unmarshal(claims.Audience, &audiences) != nil {
-			return keycloakIdentity{}, errors.New("wrong token audience")
-		}
-		found := false
-		for _, a := range audiences {
-			if a == v.clientID {
-				found = true
+	if access && (claims.AuthorizedParty != v.clientID || claims.Type != "Bearer") {
+		return keycloakIdentity{}, errors.New("wrong token client or type")
+	}
+	if !access {
+		var audience string
+		if json.Unmarshal(claims.Audience, &audience) == nil {
+			if audience != v.clientID {
+				return keycloakIdentity{}, errors.New("wrong token audience")
 			}
-		}
-		if !found {
-			return keycloakIdentity{}, errors.New("wrong token audience")
+		} else {
+			var audiences []string
+			if json.Unmarshal(claims.Audience, &audiences) != nil {
+				return keycloakIdentity{}, errors.New("wrong token audience")
+			}
+			found := false
+			for _, a := range audiences {
+				if a == v.clientID {
+					found = true
+				}
+			}
+			if !found {
+				return keycloakIdentity{}, errors.New("wrong token audience")
+			}
 		}
 	}
 	req, err := http.NewRequest(http.MethodGet, v.issuer+"/protocol/openid-connect/certs", nil)

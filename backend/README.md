@@ -14,22 +14,23 @@ Run the API with `go run ./cmd/api`.
 Copy `.env.example` values into the process environment before starting. The
 application intentionally does not load `.env` files or contain API secrets.
 
-## API flow
+## Keycloak session flow
 
-All frontend requests must use cookies (`credentials: "include"`).
+The frontend starts authorization code + PKCE login and receives the code at
+`/auth/callback`. It sends the code, verifier, and nonce to
+`POST /api/auth/exchange`. The backend exchanges the code with Keycloak,
+validates both tokens, stores the tokens in MongoDB, and returns an
+opaque HttpOnly, SameSite=Lax cookie. Frontend API calls use
+`credentials: "include"` and never handle access or refresh tokens. The
+backend refreshes expiring access tokens. `POST /api/auth/logout` deletes the
+server session and revokes the refresh token.
 
-1. `POST /api/register` with `{ "username": "...", "password": "..." }`
-2. `POST /api/login` with the same shape; returns an HttpOnly browser-session
-   cookie, which has no persistent `Expires`/`Max-Age` value
-3. `GET /api/me` validates the current session
-4. `POST /api/conversations` creates a conversation and returns its ObjectID
-5. `GET /api/conversations` lists only conversations owned by the current user
-6. `POST /api/chat` with `{ "conversation_id": "ObjectID", "content": "..." }`
-7. `GET /api/history?id=ObjectID` returns owned conversation history
-8. `POST /api/logout` revokes the server-side session and clears the cookie
+The cookie lasts up to 30 days, but Keycloak's SSO idle/max settings can end
+the login sooner. The `keycloak_sessions.expires_at` TTL index removes old
+records. Tokens in this collection are stored as plaintext, so MongoDB access
+and backups must be restricted. `COOKIE_SECURE=true` is required on HTTPS deployments.
 
-MongoDB has a TTL index on `sessions.expires_at`, while middleware also rejects
-expired sessions immediately. `AI_TOKEN_BUDGET` controls approximate input
+`AI_TOKEN_BUDGET` controls approximate input
 context size. Older unsummarized messages are incrementally folded into the
 conversation's rolling summary.
 

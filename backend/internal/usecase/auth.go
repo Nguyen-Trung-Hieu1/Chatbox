@@ -94,6 +94,13 @@ func (a *Auth) LoginKeycloak(ctx context.Context, sub, username, displayName, em
 	return a.newSession(ctx, u)
 }
 
+func (a *Auth) ResolveKeycloak(ctx context.Context, sub, username, displayName, email, firstName, lastName string) (*domain.User, error) {
+	if sub == "" {
+		return nil, domain.ErrInvalidCredentials
+	}
+	return a.users.UpsertKeycloak(ctx, sub, username, displayName, email, firstName, lastName)
+}
+
 func (a *Auth) newSession(ctx context.Context, u *domain.User) (string, *domain.User, error) {
 	raw := make([]byte, 32)
 	var err error
