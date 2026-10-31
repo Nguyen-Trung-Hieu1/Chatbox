@@ -2,6 +2,10 @@ const issuer = (process.env.REACT_APP_KEYCLOAK_ISSUER || 'https://auth.chatbox.c
 const clientId = process.env.REACT_APP_KEYCLOAK_CLIENT_ID || 'chatbox-web';
 const callbackURL = `${window.location.origin}/auth/callback`;
 const pendingKey = 'chatbox:oidc:pending';
+const apiURL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+
+// Remove tokens left in browser storage by the previous login implementation.
+window.sessionStorage.removeItem('chatbox:oidc:tokens');
 
 function randomURLSafe(length = 32) {
   const bytes = new Uint8Array(length);
@@ -37,20 +41,21 @@ export async function finishKeycloakLogin(api) {
   if (params.get('state') !== pending.state || Date.now() - pending.created > 5 * 60 * 1000 || !params.get('code')) {
     throw new Error('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
   }
-  const response = await fetch(`${issuer}/protocol/openid-connect/token`, {
+  const response = await fetch(`${apiURL}/api/auth/exchange`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'authorization_code', client_id: clientId, redirect_uri: callbackURL, code: params.get('code'), code_verifier: pending.verifier }),
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: params.get('code'), code_verifier: pending.verifier, redirect_uri: callbackURL, nonce: pending.nonce }),
   });
   if (!response.ok) throw new Error('Không thể hoàn tất đăng nhập Keycloak.');
-  const tokens = await response.json();
-  if (!tokens.id_token) throw new Error('Keycloak không trả về ID token.');
-  return api('/api/keycloak/login', { method: 'POST', body: JSON.stringify({ id_token: tokens.id_token, nonce: pending.nonce }) });
+  const result = await response.json();
+  return { user: result.user || await api('/api/me') };
 }
 
-export function logoutKeycloak() {
-  const url = new URL(`${issuer}/protocol/openid-connect/logout`);
-  url.searchParams.set('client_id', clientId);
-  url.searchParams.set('post_logout_redirect_uri', `${window.location.origin}/`);
-  window.location.assign(url.toString());
+export async function logoutKeycloak() {
+  window.sessionStorage.removeItem(pendingKey);
+  const response = await fetch(`${apiURL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+  if (!response.ok) throw new Error('Không thể đăng xuất. Vui lòng thử lại.');
+  const { logout_url: logoutURL } = await response.json();
+  window.location.assign(logoutURL);
 }

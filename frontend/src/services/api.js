@@ -6,7 +6,7 @@ export async function api(path, options = {}) {
     credentials: 'include',
     headers: options.body
       ? { 'Content-Type': 'application/json', ...options.headers }
-      : options.headers,
+      : { ...options.headers },
   });
   const data =
     response.status === 204 ? {} : await response.json().catch(() => ({}));

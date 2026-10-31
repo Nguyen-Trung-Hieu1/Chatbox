@@ -115,14 +115,8 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
   const handleLogout = async () => {
-    try {
-      await api('/api/logout', { method: 'POST' });
-    } catch (_) {
-      // Clear the local session even when offline.
-    } finally {
-      resetToLogin();
-      logoutKeycloak();
-    }
+    try { await logoutKeycloak(); }
+    catch (err) { setError(err.message); }
   };
   const changeModel = (modelId) => {
     setSelectedModel(modelId);
