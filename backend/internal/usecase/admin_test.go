@@ -13,6 +13,44 @@ type adminRepoStub struct {
 	credits int64
 }
 
+type roleRepoStub struct {
+	adminRepoStub
+	plan string
+}
+
+func (*roleRepoStub) KeycloakSub(context.Context, string) (string, error) { return "kc-user", nil }
+func (r *roleRepoStub) SyncRolePlan(_ context.Context, _ string, plan string, _ int64) error {
+	r.plan = plan
+	return nil
+}
+func (r *roleRepoStub) SetRolePlan(_ context.Context, id, plan string, credits int64) (*domain.AdminAccount, error) {
+	r.plan = plan
+	return &domain.AdminAccount{ID: id, Plan: plan, Balance: credits}, nil
+}
+
+type roleManagerStub struct{ roles map[string]bool }
+
+func (r *roleManagerStub) Roles(context.Context, string) (map[string]bool, error) {
+	return r.roles, nil
+}
+func (r *roleManagerStub) SetPlan(_ context.Context, _ string, plan string) error {
+	r.roles["chatbox-paid"] = plan == "paid"
+	return nil
+}
+
+func TestKeycloakPaidOverridesInheritedFree(t *testing.T) {
+	repo := &roleRepoStub{}
+	admin := NewAdmin(repo, 1000)
+	admin.UseKeycloakRoles(&roleManagerStub{roles: map[string]bool{"chatbox-free": true, "chatbox-paid": true, "chatbox-admin": true}})
+	u := &domain.User{ID: "local", KeycloakSub: "kc-user"}
+	if err := admin.SyncUser(context.Background(), u); err != nil {
+		t.Fatal(err)
+	}
+	if repo.plan != "paid" || !u.IsAdmin {
+		t.Fatalf("plan=%s admin=%t", repo.plan, u.IsAdmin)
+	}
+}
+
 func (*adminRepoStub) ListAccounts(context.Context) ([]domain.AdminAccount, error) { return nil, nil }
 func (*adminRepoStub) Usage(context.Context, string) ([]domain.UsageRecord, error) { return nil, nil }
 func (r *adminRepoStub) SetPlan(_ context.Context, id, plan string, _ time.Time, credits int64) (*domain.AdminAccount, error) {

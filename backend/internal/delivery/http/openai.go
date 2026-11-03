@@ -82,6 +82,10 @@ func (s *Server) apiAuth(next http.Handler) http.Handler {
 			openAIError(w, err)
 			return
 		}
+		if err := s.syncKeycloakRole(r.Context(), u); err != nil {
+			openAIError(w, err)
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
 	})
 }

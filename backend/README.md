@@ -57,6 +57,39 @@ The next reset is applied on the first request after its deadline.
 
 ## Admin usage dashboard
 
+### Keycloak-backed roles and plans
+
+Create realm roles `chatbox-free`, `chatbox-paid`, and `chatbox-admin` in the
+`chatbox` realm. `chatbox-free` may be a default role. Paid takes precedence
+when a user has both Free and Paid (because default roles are inherited).
+Give the `chatbox-backend-admin` confidential client's service account only
+the `realm-management` `manage-users` role. Keep its secret on the backend.
+
+Before enabling role-backed plans, set `KEYCLOAK_ADMIN_CLIENT_ID` and
+`KEYCLOAK_ADMIN_CLIENT_SECRET` in the private backend environment. After the
+new backend image is deployed with `KEYCLOAK_ROLES_ENABLED=false`, preview the
+one-time migration in K3s with
+`sudo k3s kubectl -n chatbox1 exec deployment/chatbox-backend -- /app/migrate-keycloak-roles`.
+Review the preview, then run the same command with `-apply`. Locally the
+equivalents are `go run ./cmd/migrate-keycloak-roles` and
+`go run ./cmd/migrate-keycloak-roles -apply`. It assigns each existing
+Keycloak-linked user a role matching the current, unexpired MongoDB plan and
+copies the legacy admin flag to `chatbox-admin`; it does not remove an admin
+role already assigned in Keycloak. Review the preview before applying.
+Set `KEYCLOAK_ROLES_ENABLED=true` and restart the API only after the migration
+completes. With this flag off, the existing MongoDB plan behavior remains
+active even if the secret is configured.
+
+When enabled, the backend reads effective realm roles on authenticated requests,
+uses `chatbox-paid` for model access, and uses `chatbox-admin` for the admin API.
+The admin plan action changes the Keycloak role and then updates the MongoDB
+credit wallet. A user with only `chatbox-free` gets Free models. API-key calls
+also recheck the owner's Keycloak roles. A Keycloak outage fails these requests
+closed. Keycloak-backed Paid roles do not use the former 48-hour local expiry.
+The Admin API client secret must never be placed in frontend configuration.
+Enabling Keycloak roles also disables the legacy password login and legacy
+session cookies so the old MongoDB admin flag cannot bypass Keycloak roles.
+
 An account needs `is_admin: true` in the MongoDB `users` collection to open
 `/admin`. For a fresh local database, set `ADMIN_BOOTSTRAP_USERNAME` and
 `ADMIN_BOOTSTRAP_PASSWORD` in the private `backend/.env` file. On startup the

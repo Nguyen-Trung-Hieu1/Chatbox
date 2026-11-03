@@ -66,6 +66,18 @@ type contextKey int
 const userKey contextKey = 0
 
 func user(ctx context.Context) *domain.User { u, _ := ctx.Value(userKey).(*domain.User); return u }
+func (s *Server) syncKeycloakRole(ctx context.Context, u *domain.User) error {
+	if syncer, ok := s.admin.(interface {
+		SyncUser(context.Context, *domain.User) error
+	}); ok {
+		return syncer.SyncUser(ctx, u)
+	}
+	return nil
+}
+func (s *Server) roleManagementEnabled() bool {
+	checker, ok := s.admin.(interface{ RoleManagementEnabled() bool })
+	return ok && checker.RoleManagementEnabled()
+}
 func jsonOut(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -115,6 +127,10 @@ func (s *Server) authn(next http.Handler) http.Handler {
 			return
 		}
 		if _, err := s.sessions.Get(r.Context(), cookie.Value); errors.Is(err, mongo.ErrNoDocuments) {
+			if s.roleManagementEnabled() {
+				fail(w, domain.ErrUnauthorized)
+				return
+			}
 			u, legacyErr := s.auth.Authenticate(r.Context(), cookie.Value)
 			if legacyErr != nil {
 				fail(w, domain.ErrUnauthorized)
@@ -138,6 +154,10 @@ func (s *Server) authn(next http.Handler) http.Handler {
 		}
 		u, e := s.auth.ResolveKeycloak(r.Context(), identity.Subject, identity.Username, identity.DisplayName, identity.Email, identity.FirstName, identity.LastName)
 		if e != nil {
+			fail(w, e)
+			return
+		}
+		if e := s.syncKeycloakRole(r.Context(), u); e != nil {
 			fail(w, e)
 			return
 		}
@@ -232,6 +252,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) legacyLogin(w http.ResponseWriter, r *http.Request) {
 	if s.keycloak == nil || s.sessions == nil {
+		fail(w, domain.ErrUnauthorized)
+		return
+	}
+	if s.roleManagementEnabled() {
 		fail(w, domain.ErrUnauthorized)
 		return
 	}

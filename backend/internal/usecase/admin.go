@@ -3,6 +3,7 @@ package usecase
 import (
 	"backend/internal/domain"
 	"context"
+	"errors"
 	"sort"
 	"time"
 )
@@ -16,10 +17,47 @@ type AdminRepository interface {
 type Admin struct {
 	repo        AdminRepository
 	freeCredits int64
+	roles       RoleManager
+}
+
+type RoleManager interface {
+	Roles(context.Context, string) (map[string]bool, error)
+	SetPlan(context.Context, string, string) error
+}
+
+type roleRepository interface {
+	KeycloakSub(context.Context, string) (string, error)
+	SyncRolePlan(context.Context, string, string, int64) error
+	SetRolePlan(context.Context, string, string, int64) (*domain.AdminAccount, error)
 }
 
 func NewAdmin(repo AdminRepository, freeCredits int64) *Admin {
 	return &Admin{repo: repo, freeCredits: freeCredits}
+}
+
+func (a *Admin) UseKeycloakRoles(roles RoleManager) { a.roles = roles }
+func (a *Admin) RoleManagementEnabled() bool        { return a.roles != nil }
+
+func (a *Admin) SyncUser(ctx context.Context, u *domain.User) error {
+	if a.roles == nil {
+		return nil
+	}
+	if u.KeycloakSub == "" {
+		return domain.ErrUnauthorized
+	}
+	roles, err := a.roles.Roles(ctx, u.KeycloakSub)
+	if err != nil {
+		return err
+	}
+	u.IsAdmin = roles["chatbox-admin"]
+	plan := "free"
+	if roles["chatbox-paid"] {
+		plan = "paid"
+	}
+	if repo, ok := a.repo.(roleRepository); ok {
+		return repo.SyncRolePlan(ctx, u.ID, plan, a.freeCredits)
+	}
+	return errors.New("role plan repository unavailable")
 }
 
 func (a *Admin) SetPlan(ctx context.Context, userID, plan string) (*domain.AdminAccount, error) {
@@ -29,6 +67,38 @@ func (a *Admin) SetPlan(ctx context.Context, userID, plan string) (*domain.Admin
 	credits := a.freeCredits
 	if plan == "paid" {
 		credits = 2000
+	}
+	if a.roles != nil {
+		repo, ok := a.repo.(roleRepository)
+		if !ok {
+			return nil, errors.New("role plan repository unavailable")
+		}
+		sub, err := repo.KeycloakSub(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if sub == "" {
+			return nil, domain.ErrInvalidID
+		}
+		before, err := a.roles.Roles(ctx, sub)
+		if err != nil {
+			return nil, err
+		}
+		if err := a.roles.SetPlan(ctx, sub, plan); err != nil {
+			return nil, err
+		}
+		account, err := repo.SetRolePlan(ctx, userID, plan, credits)
+		if err != nil {
+			previous := "free"
+			if before["chatbox-paid"] {
+				previous = "paid"
+			}
+			if rollbackErr := a.roles.SetPlan(ctx, sub, previous); rollbackErr != nil {
+				return nil, errors.Join(err, rollbackErr)
+			}
+			return nil, err
+		}
+		return account, nil
 	}
 	return a.repo.SetPlan(ctx, userID, plan, time.Now().UTC(), credits)
 }
@@ -40,6 +110,28 @@ func (a *Admin) Users(ctx context.Context) ([]domain.AdminAccount, error) {
 	}
 	now := time.Now().UTC()
 	for i := range items {
+		if a.roles != nil {
+			repo, ok := a.repo.(roleRepository)
+			if !ok {
+				return nil, errors.New("role plan repository unavailable")
+			}
+			sub, err := repo.KeycloakSub(ctx, items[i].ID)
+			if err != nil {
+				return nil, err
+			}
+			if sub != "" {
+				roles, err := a.roles.Roles(ctx, sub)
+				if err != nil {
+					return nil, err
+				}
+				items[i].Plan = "free"
+				if roles["chatbox-paid"] {
+					items[i].Plan = "paid"
+				}
+				items[i].PaidUntil = nil
+				continue
+			}
+		}
 		if items[i].Plan != "paid" || items[i].PaidUntil == nil || !items[i].PaidUntil.After(now) {
 			items[i].Plan, items[i].PaidUntil = "free", nil
 		}

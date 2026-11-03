@@ -39,7 +39,7 @@ func (s *Chat) Entitlement(ctx context.Context, user string) (*domain.Entitlemen
 		return nil, err
 	}
 	models := s.freeModels
-	if plan == "paid" && paidUntil != nil && time.Now().Before(*paidUntil) {
+	if plan == "paid" && (paidUntil == nil || time.Now().Before(*paidUntil)) {
 		models = s.paidModels
 	} else {
 		plan, paidUntil = "free", nil

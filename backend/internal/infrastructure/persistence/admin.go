@@ -79,6 +79,57 @@ func (r *AdminRepository) Usage(ctx context.Context, userID string) ([]domain.Us
 	return wallet.Usage, nil
 }
 
+func (r *AdminRepository) KeycloakSub(ctx context.Context, userID string) (string, error) {
+	id, err := oid(userID)
+	if err != nil {
+		return "", err
+	}
+	var user struct {
+		Sub string `bson:"keycloak_sub"`
+	}
+	if err := r.db.Users.FindOne(ctx, bson.M{"_id": id}, options.FindOne().SetProjection(bson.M{"keycloak_sub": 1})).Decode(&user); err != nil {
+		return "", mapErr(err)
+	}
+	return user.Sub, nil
+}
+
+func (r *AdminRepository) SyncRolePlan(ctx context.Context, userID, plan string, freeCredits int64) error {
+	id, err := oid(userID)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	credits := freeCredits
+	if plan == "paid" {
+		credits = paidCredits
+	}
+	_, err = r.db.Wallets.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$setOnInsert": bson.M{"usage": bson.A{}, "balance": credits, "credit_reset_at": now.Add(creditPeriod), "plan": plan}}, options.Update().SetUpsert(true))
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Wallets.UpdateOne(ctx, bson.M{"_id": id, "$or": bson.A{bson.M{"plan": bson.M{"$ne": plan}}, bson.M{"plan_source": bson.M{"$ne": "keycloak"}}}}, bson.M{"$set": bson.M{"plan": plan, "plan_source": "keycloak", "balance": credits, "credit_reset_at": now.Add(creditPeriod)}, "$unset": bson.M{"paid_until": ""}})
+	return err
+}
+
+func (r *AdminRepository) SetRolePlan(ctx context.Context, userID, plan string, credits int64) (*domain.AdminAccount, error) {
+	id, err := oid(userID)
+	if err != nil {
+		return nil, err
+	}
+	var user struct {
+		Username string `bson:"username"`
+	}
+	if err := r.db.Users.FindOne(ctx, bson.M{"_id": id}).Decode(&user); err != nil {
+		return nil, mapErr(err)
+	}
+	now := time.Now().UTC()
+	_, err = r.db.Wallets.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"plan": plan, "plan_source": "keycloak", "balance": credits, "credit_reset_at": now.Add(creditPeriod)}, "$unset": bson.M{"paid_until": ""}}, options.Update().SetUpsert(true))
+	if err != nil {
+		return nil, err
+	}
+	return &domain.AdminAccount{ID: userID, Username: user.Username, Plan: plan, Balance: credits}, nil
+}
+
 func (r *AdminRepository) SetPlan(ctx context.Context, userID, plan string, now time.Time, credits int64) (*domain.AdminAccount, error) {
 	id, err := oid(userID)
 	if err != nil {

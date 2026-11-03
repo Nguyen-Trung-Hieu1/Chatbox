@@ -85,6 +85,10 @@ func (s *Server) exchangeKeycloakCode(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	if err := s.syncKeycloakRole(r.Context(), u); err != nil {
+		fail(w, err)
+		return
+	}
 	secret := make([]byte, 32)
 	if _, err = rand.Read(secret); err != nil {
 		fail(w, err)

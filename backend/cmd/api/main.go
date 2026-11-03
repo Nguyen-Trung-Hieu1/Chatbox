@@ -5,6 +5,7 @@ import (
 	httpdelivery "backend/internal/delivery/http"
 	"backend/internal/domain"
 	"backend/internal/infrastructure/ai"
+	"backend/internal/infrastructure/keycloak"
 	"backend/internal/infrastructure/persistence"
 	"backend/internal/usecase"
 	"context"
@@ -45,6 +46,9 @@ func main() {
 	chat := usecase.NewChat(persistence.NewConversationRepository(db), persistence.NewMessageRepository(db), ai.New(cfg.AIEndpoint, cfg.AIKey, cfg.AIModel), cfg.TokenBudget, persistence.NewBillingRepository(db), convert(cfg.FreeModels), convert(cfg.PaidModels), cfg.FreeCredits)
 	keys := usecase.NewAPIKeys(persistence.NewAPIKeyRepository(db), persistence.NewUserRepository(db))
 	admin := usecase.NewAdmin(persistence.NewAdminRepository(db), cfg.FreeCredits)
+	if cfg.KeycloakRolesEnabled {
+		admin.UseKeycloakRoles(keycloak.NewAdmin(cfg.KeycloakIssuer, cfg.KeycloakAdminClientID, cfg.KeycloakAdminClientSecret))
+	}
 	transport := httpdelivery.New(auth, chat, keys, admin, keycloakSessions, cfg.CookieName, cfg.CookieSecure, cfg.KeycloakIssuer, cfg.KeycloakClientID)
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: transport.Handler(cfg.CORSOrigin), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 2 * time.Minute, IdleTimeout: 60 * time.Second}
 	log.Printf("Backend đang chạy tại %s", server.Addr)

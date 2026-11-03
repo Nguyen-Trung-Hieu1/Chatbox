@@ -18,6 +18,8 @@ type Config struct {
 	FreeCredits                                                                           int64
 	AdminBootstrapUsername, AdminBootstrapPassword                                        string
 	KeycloakIssuer, KeycloakClientID                                                      string
+	KeycloakAdminClientID, KeycloakAdminClientSecret                                      string
+	KeycloakRolesEnabled                                                                  bool
 	FreeModels, PaidModels                                                                []Model
 }
 
@@ -39,6 +41,12 @@ func Load(files ...string) (Config, error) {
 	c.AdminBootstrapUsername = os.Getenv("ADMIN_BOOTSTRAP_USERNAME")
 	c.KeycloakIssuer = value("KEYCLOAK_ISSUER", "https://auth.chatbox.cyou/realms/chatbox")
 	c.KeycloakClientID = value("KEYCLOAK_CLIENT_ID", "chatbox-web")
+	c.KeycloakAdminClientID = value("KEYCLOAK_ADMIN_CLIENT_ID", "chatbox-backend-admin")
+	c.KeycloakAdminClientSecret = os.Getenv("KEYCLOAK_ADMIN_CLIENT_SECRET")
+	c.KeycloakRolesEnabled = strings.EqualFold(os.Getenv("KEYCLOAK_ROLES_ENABLED"), "true")
+	if c.KeycloakRolesEnabled && c.KeycloakAdminClientSecret == "" {
+		return Config{}, fmt.Errorf("KEYCLOAK_ADMIN_CLIENT_SECRET is required when Keycloak roles are enabled")
+	}
 	c.AdminBootstrapPassword = os.Getenv("ADMIN_BOOTSTRAP_PASSWORD")
 	if (c.AdminBootstrapUsername == "") != (c.AdminBootstrapPassword == "") || (c.AdminBootstrapUsername != "" && len(c.AdminBootstrapPassword) < 8) {
 		return Config{}, fmt.Errorf("cấu hình tài khoản admin không hợp lệ")

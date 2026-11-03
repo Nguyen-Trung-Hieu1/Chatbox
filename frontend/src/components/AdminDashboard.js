@@ -89,7 +89,7 @@ export default function AdminDashboard({ onBack, onLogout }) {
           {selected && <>
             <div className="admin-detail-heading"><div><span className="admin-eyebrow">THỐNG KÊ TÀI KHOẢN</span><h2>{selected.username}</h2></div><span className={`admin-plan ${selected.plan}`}>{selected.plan === 'paid' ? 'Paid' : 'Free'}</span></div>
             <div className="admin-plan-control">
-              <div><strong>Gói tài khoản</strong><small>{selected.plan === 'paid' ? 'Paid trong 2 ngày kể từ lúc chuyển gói; 2.000 credit mỗi 2 giờ' : 'Free; 1.000 credit mỗi 2 giờ'}</small></div>
+              <div><strong>Gói tài khoản</strong><small>{selected.plan === 'paid' ? (selected.paid_until ? 'Paid trong 2 ngày kể từ lúc chuyển gói; 2.000 credit mỗi 2 giờ' : 'Paid theo quyền Keycloak; 2.000 credit mỗi 2 giờ') : 'Free; 1.000 credit mỗi 2 giờ'}</small></div>
               <label className="admin-plan-switch"><span>Free</span><input type="checkbox" role="switch" aria-label={`Gói Paid của ${selected.username}`} checked={selected.plan === 'paid'} disabled={savingPlan} onChange={changePlan} /><span className="admin-switch-track" aria-hidden="true" /><span>Paid</span></label>
             </div>
             {reportLoading && <p className="admin-muted">Đang tải thống kê…</p>}

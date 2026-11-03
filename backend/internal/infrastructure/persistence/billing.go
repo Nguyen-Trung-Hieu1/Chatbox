@@ -42,7 +42,7 @@ func (r *BillingRepository) Plan(ctx context.Context, user string, freeCredits i
 	}
 	now := time.Now().UTC()
 	_, err = r.db.Wallets.UpdateOne(ctx,
-		bson.M{"_id": id, "plan": "paid", "$or": bson.A{
+		bson.M{"_id": id, "plan": "paid", "plan_source": bson.M{"$ne": "keycloak"}, "$or": bson.A{
 			bson.M{"paid_until": bson.M{"$lte": now}},
 			bson.M{"paid_until": bson.M{"$exists": false}},
 		}},
@@ -52,10 +52,7 @@ func (r *BillingRepository) Plan(ctx context.Context, user string, freeCredits i
 		return "", nil, nil, err
 	}
 	_, err = r.db.Wallets.UpdateOne(ctx,
-		bson.M{"_id": id, "plan": "paid", "paid_until": bson.M{"$gt": now}, "$or": bson.A{
-			bson.M{"credit_reset_at": bson.M{"$lte": now}},
-			bson.M{"credit_reset_at": bson.M{"$exists": false}},
-		}},
+		bson.M{"_id": id, "plan": "paid", "$or": bson.A{bson.M{"plan_source": "keycloak"}, bson.M{"paid_until": bson.M{"$gt": now}}}, "credit_reset_at": bson.M{"$lte": now}},
 		bson.M{"$set": bson.M{"balance": paidCredits, "credit_reset_at": now.Add(creditPeriod)}},
 	)
 	if err != nil {

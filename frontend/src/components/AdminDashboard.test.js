@@ -35,5 +35,5 @@ test('admin can switch a user from Free to Paid', async () => {
   await waitFor(() => expect(api).toHaveBeenCalledWith('/api/admin/plan', {
     method: 'PATCH', body: JSON.stringify({ user_id: 'u1', plan: 'paid' }),
   }));
-  expect(await screen.findByText(/Paid trong 2 ngày/)).toBeInTheDocument();
+  expect(await screen.findByText(/Paid theo quyền Keycloak/)).toBeInTheDocument();
 });
