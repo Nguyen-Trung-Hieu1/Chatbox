@@ -121,14 +121,6 @@ function App() {
     try { await logoutKeycloak(); }
     catch (err) { setError(err.message); }
   };
-  const handleLegacyLogin = async (username, password) => {
-    const result = await api('/api/auth/legacy-login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password }),
-    });
-    setLoginError('');
-    setCurrentUser(result.user);
-  };
   const changeModel = (modelId) => {
     setSelectedModel(modelId);
     if (currentUser?.id) rememberModel(currentUser.id, modelId);
@@ -252,7 +244,7 @@ function App() {
     );
   }
   if (!currentUser) {
-    return <Auth error={loginError} onLegacyLogin={handleLegacyLogin} />;
+    return <Auth error={loginError} />;
   }
   if (showAdmin) {
     if (currentUser.is_admin) return <AdminDashboard onBack={() => navigateAdmin(false)} onLogout={handleLogout} />;

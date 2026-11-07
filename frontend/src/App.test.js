@@ -53,11 +53,9 @@ test('handles a Keycloak callback only once in React StrictMode', async () => {
   window.history.replaceState({}, '', '/');
 });
 
-test('lets existing users open the old account login form', () => {
+test('shows only Keycloak account actions', () => {
   render(<Auth />);
   expect(screen.getByRole('button', { name: 'Đăng nhập' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Tạo tài khoản' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập bằng tài khoản cũ' }));
-  expect(screen.getByLabelText('Tên đăng nhập cũ')).toBeInTheDocument();
-  expect(screen.getByLabelText('Mật khẩu cũ')).toHaveAttribute('type', 'password');
+  expect(screen.queryByText('Đăng nhập bằng tài khoản cũ')).not.toBeInTheDocument();
 });
