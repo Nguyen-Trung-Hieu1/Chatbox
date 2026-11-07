@@ -26,10 +26,6 @@ func main() {
 		log.Fatal("Kết nối MongoDB thất bại: ", err)
 	}
 	defer db.Client.Disconnect(context.Background())
-	keycloakSessions, err := persistence.NewKeycloakSessionStore(ctx, db)
-	if err != nil {
-		log.Fatal("Không thể khởi tạo phiên Keycloak: ", err)
-	}
 	auth := usecase.NewAuth(persistence.NewUserRepository(db), persistence.NewSessionRepository(db), cfg.SessionTTL)
 	if cfg.AdminBootstrapUsername != "" {
 		if err := auth.BootstrapAdmin(ctx, cfg.AdminBootstrapUsername, cfg.AdminBootstrapPassword); err != nil {
@@ -49,7 +45,7 @@ func main() {
 	if cfg.KeycloakRolesEnabled {
 		admin.UseKeycloakRoles(keycloak.NewAdmin(cfg.KeycloakIssuer, cfg.KeycloakAdminClientID, cfg.KeycloakAdminClientSecret))
 	}
-	transport := httpdelivery.New(auth, chat, keys, admin, keycloakSessions, cfg.CookieName, cfg.CookieSecure, cfg.KeycloakIssuer, cfg.KeycloakClientID)
+	transport := httpdelivery.New(auth, chat, keys, admin, cfg.CookieName, cfg.RefreshCookieName, cfg.CookieSecure, cfg.KeycloakIssuer, cfg.KeycloakClientID)
 	server := &http.Server{Addr: cfg.HTTPAddr, Handler: transport.Handler(cfg.CORSOrigin), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 2 * time.Minute, IdleTimeout: 60 * time.Second}
 	log.Printf("Backend đang chạy tại %s", server.Addr)
 	log.Fatal(server.ListenAndServe())

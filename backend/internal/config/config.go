@@ -11,16 +11,16 @@ import (
 )
 
 type Config struct {
-	MongoURI, MongoDatabase, AIEndpoint, AIKey, AIModel, HTTPAddr, CORSOrigin, CookieName string
-	CookieSecure                                                                          bool
-	SessionTTL                                                                            time.Duration
-	TokenBudget                                                                           int
-	FreeCredits                                                                           int64
-	AdminBootstrapUsername, AdminBootstrapPassword                                        string
-	KeycloakIssuer, KeycloakClientID                                                      string
-	KeycloakAdminClientID, KeycloakAdminClientSecret                                      string
-	KeycloakRolesEnabled                                                                  bool
-	FreeModels, PaidModels                                                                []Model
+	MongoURI, MongoDatabase, AIEndpoint, AIKey, AIModel, HTTPAddr, CORSOrigin, CookieName, RefreshCookieName string
+	CookieSecure                                                                                             bool
+	SessionTTL                                                                                               time.Duration
+	TokenBudget                                                                                              int
+	FreeCredits                                                                                              int64
+	AdminBootstrapUsername, AdminBootstrapPassword                                                           string
+	KeycloakIssuer, KeycloakClientID                                                                         string
+	KeycloakAdminClientID, KeycloakAdminClientSecret                                                         string
+	KeycloakRolesEnabled                                                                                     bool
+	FreeModels, PaidModels                                                                                   []Model
 }
 
 type Model struct {
@@ -37,7 +37,7 @@ func Load(files ...string) (Config, error) {
 			return Config{}, err
 		}
 	}
-	c := Config{MongoURI: value("MONGO_URI", "mongodb://localhost:27017"), MongoDatabase: value("MONGO_DATABASE", "Chatbox1"), AIEndpoint: value("AI_ENDPOINT", "http://localhost:20127/v1/chat/completions"), AIKey: os.Getenv("AI_API_KEY"), AIModel: value("AI_MODEL", "ag/claude-opus-4-6-thinking"), HTTPAddr: value("HTTP_ADDR", ":8080"), CORSOrigin: value("CORS_ORIGIN", "http://localhost:3000"), CookieName: value("SESSION_COOKIE_NAME", "chatbox_session"), CookieSecure: strings.EqualFold(value("COOKIE_SECURE", "false"), "true"), SessionTTL: time.Duration(integer("SESSION_TTL_HOURS", 24)) * time.Hour, TokenBudget: integer("AI_TOKEN_BUDGET", 6000), FreeCredits: int64(integer("FREE_INITIAL_CREDITS", 1000))}
+	c := Config{MongoURI: value("MONGO_URI", "mongodb://localhost:27017"), MongoDatabase: value("MONGO_DATABASE", "Chatbox1"), AIEndpoint: value("AI_ENDPOINT", "http://localhost:20127/v1/chat/completions"), AIKey: os.Getenv("AI_API_KEY"), AIModel: value("AI_MODEL", "ag/claude-opus-4-6-thinking"), HTTPAddr: value("HTTP_ADDR", ":8080"), CORSOrigin: value("CORS_ORIGIN", "http://localhost:3000"), CookieName: value("SESSION_COOKIE_NAME", "chatbox_session"), RefreshCookieName: value("REFRESH_COOKIE_NAME", "chatbox_refresh"), CookieSecure: strings.EqualFold(value("COOKIE_SECURE", "false"), "true"), SessionTTL: time.Duration(integer("SESSION_TTL_HOURS", 24)) * time.Hour, TokenBudget: integer("AI_TOKEN_BUDGET", 6000), FreeCredits: int64(integer("FREE_INITIAL_CREDITS", 1000))}
 	c.AdminBootstrapUsername = os.Getenv("ADMIN_BOOTSTRAP_USERNAME")
 	c.KeycloakIssuer = value("KEYCLOAK_ISSUER", "https://auth.chatbox.cyou/realms/chatbox")
 	c.KeycloakClientID = value("KEYCLOAK_CLIENT_ID", "chatbox-web")

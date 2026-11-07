@@ -1,3 +1,5 @@
+import { clearAccessToken, setAccessToken } from './services/api';
+
 const issuer = (process.env.REACT_APP_KEYCLOAK_ISSUER || 'https://auth.chatbox.cyou/realms/chatbox').replace(/\/$/, '');
 const clientId = process.env.REACT_APP_KEYCLOAK_CLIENT_ID || 'chatbox-web';
 const callbackURL = `${window.location.origin}/auth/callback`;
@@ -49,6 +51,7 @@ export async function finishKeycloakLogin(api) {
   });
   if (!response.ok) throw new Error('Không thể hoàn tất đăng nhập Keycloak.');
   const result = await response.json();
+  setAccessToken(result.access_token);
   return { user: result.user || await api('/api/me') };
 }
 
@@ -56,6 +59,7 @@ export async function logoutKeycloak() {
   window.sessionStorage.removeItem(pendingKey);
   const response = await fetch(`${apiURL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
   if (!response.ok) throw new Error('Không thể đăng xuất. Vui lòng thử lại.');
+  clearAccessToken();
   const { logout_url: logoutURL } = await response.json();
   window.location.assign(logoutURL);
 }

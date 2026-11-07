@@ -2,13 +2,9 @@ package httpdelivery
 
 import (
 	"backend/internal/domain"
-	"backend/internal/infrastructure/persistence"
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,7 +12,7 @@ import (
 	"time"
 )
 
-const sessionLifetime = 30 * 24 * time.Hour
+const refreshCookieLifetime = 30 * 24 * time.Hour
 
 type keycloakTokenResponse struct {
 	AccessToken  string `json:"access_token"`
@@ -43,14 +39,52 @@ func (s *Server) requestTokens(ctx context.Context, values url.Values) (keycloak
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&tokens); err != nil {
 		return tokens, resp.StatusCode, err
 	}
-	if tokens.AccessToken == "" || tokens.RefreshToken == "" || tokens.ExpiresIn <= 0 {
+	if tokens.AccessToken == "" || tokens.ExpiresIn <= 0 {
 		return tokens, resp.StatusCode, errors.New("Keycloak returned incomplete tokens")
 	}
 	return tokens, resp.StatusCode, nil
 }
 
+func (s *Server) refreshCookieName() string {
+	if s.refreshCookie != "" {
+		return s.refreshCookie
+	}
+	return "chatbox_refresh"
+}
+
+func (s *Server) setRefreshCookie(w http.ResponseWriter, value string) {
+	sameSite := http.SameSiteLaxMode
+	if s.secure {
+		sameSite = http.SameSiteNoneMode
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: s.refreshCookieName(), Value: value, Path: "/api/auth", HttpOnly: true,
+		Secure: s.secure, SameSite: sameSite, MaxAge: int(refreshCookieLifetime.Seconds()),
+	})
+}
+
+func (s *Server) clearRefreshCookie(w http.ResponseWriter) {
+	sameSite := http.SameSiteLaxMode
+	if s.secure {
+		sameSite = http.SameSiteNoneMode
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: s.refreshCookieName(), Value: "", Path: "/api/auth", HttpOnly: true,
+		Secure: s.secure, SameSite: sameSite, MaxAge: -1,
+	})
+}
+
+func (s *Server) clearLegacySessionCookie(w http.ResponseWriter) {
+	if s.cookie == "" {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: "", Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+}
+
 func (s *Server) exchangeKeycloakCode(w http.ResponseWriter, r *http.Request) {
-	if s.keycloak == nil || s.sessions == nil {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	if s.keycloak == nil {
 		jsonOut(w, 503, map[string]string{"error": "Keycloak chưa được cấu hình"})
 		return
 	}
@@ -66,7 +100,7 @@ func (s *Server) exchangeKeycloakCode(w http.ResponseWriter, r *http.Request) {
 	}
 	values := url.Values{"grant_type": {"authorization_code"}, "client_id": {s.keycloak.clientID}, "redirect_uri": {in.RedirectURI}, "code": {in.Code}, "code_verifier": {in.Verifier}}
 	tokens, _, err := s.requestTokens(r.Context(), values)
-	if err != nil {
+	if err != nil || tokens.RefreshToken == "" {
 		jsonOut(w, 401, map[string]string{"error": "Không thể hoàn tất đăng nhập Keycloak"})
 		return
 	}
@@ -89,74 +123,67 @@ func (s *Server) exchangeKeycloakCode(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
-	secret := make([]byte, 32)
-	if _, err = rand.Read(secret); err != nil {
-		fail(w, err)
-		return
-	}
-	sessionID := base64.RawURLEncoding.EncodeToString(secret)
-	value := persistence.KeycloakSession{AccessToken: tokens.AccessToken, RefreshToken: tokens.RefreshToken, IDToken: tokens.IDToken, AccessExpiry: time.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second)}
-	if err = s.sessions.Create(r.Context(), sessionID, value, time.Now().Add(sessionLifetime)); err != nil {
-		fail(w, err)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: sessionID, Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: int(sessionLifetime.Seconds())})
-	jsonOut(w, 200, map[string]any{"user": u})
+	s.clearLegacySessionCookie(w)
+	s.setRefreshCookie(w, tokens.RefreshToken)
+	jsonOut(w, 200, map[string]any{"user": u, "access_token": tokens.AccessToken, "expires_in": tokens.ExpiresIn})
 }
 
-func (s *Server) activeSession(ctx context.Context, sessionID string) (persistence.KeycloakSession, error) {
-	if s.sessions == nil {
-		return persistence.KeycloakSession{}, domain.ErrUnauthorized
+func (s *Server) refreshKeycloakToken(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	if s.keycloak == nil {
+		jsonOut(w, 503, map[string]string{"error": "Keycloak chưa được cấu hình"})
+		return
 	}
-	// Serialize refreshes so a rotating refresh token cannot be spent twice by concurrent requests.
-	s.refreshMu.Lock()
-	defer s.refreshMu.Unlock()
-	value, err := s.sessions.Get(ctx, sessionID)
-	if err != nil {
-		return value, err
+	cookie, err := r.Cookie(s.refreshCookieName())
+	if err != nil || cookie.Value == "" {
+		fail(w, domain.ErrUnauthorized)
+		return
 	}
-	if time.Until(value.AccessExpiry) > 30*time.Second {
-		return value, nil
-	}
-	tokens, status, err := s.requestTokens(ctx, url.Values{"grant_type": {"refresh_token"}, "client_id": {s.keycloak.clientID}, "refresh_token": {value.RefreshToken}})
+	values := url.Values{"grant_type": {"refresh_token"}, "client_id": {s.keycloak.clientID}, "refresh_token": {cookie.Value}}
+	tokens, status, err := s.requestTokens(r.Context(), values)
 	if err != nil {
 		if status >= 400 && status < 500 {
-			_ = s.sessions.Delete(ctx, sessionID)
+			s.clearRefreshCookie(w)
 		}
-		return value, err
+		fail(w, domain.ErrUnauthorized)
+		return
 	}
-	value.AccessToken = tokens.AccessToken
-	value.RefreshToken = tokens.RefreshToken
-	if tokens.IDToken != "" {
-		value.IDToken = tokens.IDToken
+	if tokens.RefreshToken != "" {
+		// Persist rotation before downstream role/profile reads can fail.
+		s.setRefreshCookie(w, tokens.RefreshToken)
 	}
-	value.AccessExpiry = time.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second)
-	if err := s.sessions.Update(ctx, sessionID, value); err != nil {
-		return value, err
+	identity, err := s.keycloak.verifyAccessToken(tokens.AccessToken)
+	if err != nil {
+		s.clearRefreshCookie(w)
+		fail(w, domain.ErrUnauthorized)
+		return
 	}
-	return value, nil
+	u, err := s.auth.ResolveKeycloak(r.Context(), identity.Subject, identity.Username, identity.DisplayName, identity.Email, identity.FirstName, identity.LastName)
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	if err := s.syncKeycloakRole(r.Context(), u); err != nil {
+		fail(w, err)
+		return
+	}
+	jsonOut(w, http.StatusOK, map[string]any{"user": u, "access_token": tokens.AccessToken, "expires_in": tokens.ExpiresIn})
 }
 
 func (s *Server) logoutKeycloakSession(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(s.cookie); err == nil && s.sessions != nil {
-		if value, err := s.sessions.Get(r.Context(), c.Value); errors.Is(err, mongo.ErrNoDocuments) {
-			_ = s.auth.Logout(r.Context(), c.Value)
-			http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: "", Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
-			jsonOut(w, 200, map[string]string{"logout_url": s.origin + "/"})
-			return
-		} else if err == nil && s.keycloak != nil {
-			values := url.Values{"client_id": {s.keycloak.clientID}, "token": {value.RefreshToken}, "token_type_hint": {"refresh_token"}}
-			req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.keycloak.issuer+"/protocol/openid-connect/revoke", strings.NewReader(values.Encode()))
-			if err == nil {
-				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-				if resp, err := s.keycloak.client.Do(req); err == nil {
-					resp.Body.Close()
-				}
+	if cookie, err := r.Cookie(s.refreshCookieName()); err == nil && cookie.Value != "" && s.keycloak != nil {
+		values := url.Values{"client_id": {s.keycloak.clientID}, "token": {cookie.Value}, "token_type_hint": {"refresh_token"}}
+		req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, s.keycloak.issuer+"/protocol/openid-connect/revoke", strings.NewReader(values.Encode()))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if resp, err := s.keycloak.client.Do(req); err == nil {
+				resp.Body.Close()
 			}
 		}
-		_ = s.sessions.Delete(r.Context(), c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: s.cookie, Value: "", Path: "/", HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	s.clearRefreshCookie(w)
+	s.clearLegacySessionCookie(w)
 	if s.keycloak == nil {
 		jsonOut(w, 200, map[string]string{"logout_url": s.origin + "/"})
 		return

@@ -1,13 +1,55 @@
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+let accessToken = null;
+let refreshInFlight = null;
+
+export function setAccessToken(token) {
+  accessToken = token || null;
+}
+
+export function clearAccessToken() {
+  accessToken = null;
+}
+
+export async function refreshSession() {
+  if (!refreshInFlight) {
+    refreshInFlight = fetch(`${API_URL}/api/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    }).then(async (response) => {
+      if (!response.ok) {
+        clearAccessToken();
+        return null;
+      }
+      const data = await response.json();
+      setAccessToken(data.access_token);
+      return data;
+    }).catch(() => {
+      clearAccessToken();
+      return null;
+    }).finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+}
+
+async function authenticatedFetch(url, options = {}, retry = true) {
+  const headers = { ...options.headers };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const response = await fetch(url, { ...options, headers, credentials: 'include' });
+  if (response.status === 401 && retry && accessToken) {
+    const session = await refreshSession();
+    if (session?.access_token) return authenticatedFetch(url, options, false);
+  }
+  return response;
+}
 
 export async function api(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await authenticatedFetch(`${API_URL}${path}`, {
     ...options,
-    credentials: 'include',
     headers: options.body
       ? { 'Content-Type': 'application/json', ...options.headers }
       : { ...options.headers },
-  });
+  }, !path.startsWith('/api/auth/'));
   const data =
     response.status === 204 ? {} : await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -19,13 +61,13 @@ export async function api(path, options = {}) {
 }
 
 export async function streamChat(payload, { signal, onDelta }) {
-  const response = await fetch(`${API_URL}/api/chat`, {
+  const options = {
     method: 'POST',
-    credentials: 'include',
     signal,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  });
+  };
+  const response = await authenticatedFetch(`${API_URL}/api/chat`, options);
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     const error = new Error(data.error || 'Đã có lỗi xảy ra');

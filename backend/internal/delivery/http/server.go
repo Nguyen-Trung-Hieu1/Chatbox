@@ -2,16 +2,13 @@ package httpdelivery
 
 import (
 	"backend/internal/domain"
-	"backend/internal/infrastructure/persistence"
 	"backend/internal/usecase"
 	"context"
 	"encoding/json"
 	"errors"
-	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -41,20 +38,19 @@ type APIKeyUseCase interface {
 	Authenticate(context.Context, string) (*domain.User, error)
 }
 type Server struct {
-	auth      AuthUseCase
-	chat      ChatUseCase
-	keys      APIKeyUseCase
-	admin     AdminUseCase
-	cookie    string
-	secure    bool
-	keycloak  *keycloakVerifier
-	sessions  *persistence.KeycloakSessionStore
-	refreshMu sync.Mutex
-	origin    string
+	auth          AuthUseCase
+	chat          ChatUseCase
+	keys          APIKeyUseCase
+	admin         AdminUseCase
+	cookie        string
+	refreshCookie string
+	secure        bool
+	keycloak      *keycloakVerifier
+	origin        string
 }
 
-func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, admin AdminUseCase, sessions *persistence.KeycloakSessionStore, cookie string, secure bool, keycloakConfig ...string) *Server {
-	s := &Server{auth: auth, chat: chat, keys: keys, admin: admin, sessions: sessions, cookie: cookie, secure: secure}
+func New(auth *usecase.Auth, chat *usecase.Chat, keys *usecase.APIKeys, admin AdminUseCase, cookie, refreshCookie string, secure bool, keycloakConfig ...string) *Server {
+	s := &Server{auth: auth, chat: chat, keys: keys, admin: admin, cookie: cookie, refreshCookie: refreshCookie, secure: secure}
 	if len(keycloakConfig) == 2 {
 		s.keycloak = newKeycloakVerifier(keycloakConfig[0], keycloakConfig[1])
 	}
@@ -117,48 +113,39 @@ func method(m string, h http.HandlerFunc) http.HandlerFunc {
 }
 func (s *Server) authn(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.keycloak != nil {
+			parts := strings.Fields(r.Header.Get("Authorization"))
+			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && parts[1] != "" {
+				identity, err := s.keycloak.verifyAccessToken(parts[1])
+				if err != nil {
+					fail(w, domain.ErrUnauthorized)
+					return
+				}
+				u, err := s.auth.ResolveKeycloak(r.Context(), identity.Subject, identity.Username, identity.DisplayName, identity.Email, identity.FirstName, identity.LastName)
+				if err != nil {
+					fail(w, err)
+					return
+				}
+				if err := s.syncKeycloakRole(r.Context(), u); err != nil {
+					fail(w, err)
+					return
+				}
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
+				return
+			}
+			if s.roleManagementEnabled() {
+				fail(w, domain.ErrUnauthorized)
+				return
+			}
+		}
 		cookie, err := r.Cookie(s.cookie)
 		if err != nil || cookie.Value == "" {
 			fail(w, domain.ErrUnauthorized)
 			return
 		}
-		if s.keycloak == nil || s.sessions == nil {
+		u, err := s.auth.Authenticate(r.Context(), cookie.Value)
+		if err != nil {
 			fail(w, domain.ErrUnauthorized)
-			return
-		}
-		if _, err := s.sessions.Get(r.Context(), cookie.Value); errors.Is(err, mongo.ErrNoDocuments) {
-			if s.roleManagementEnabled() {
-				fail(w, domain.ErrUnauthorized)
-				return
-			}
-			u, legacyErr := s.auth.Authenticate(r.Context(), cookie.Value)
-			if legacyErr != nil {
-				fail(w, domain.ErrUnauthorized)
-				return
-			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
-			return
-		} else if err != nil {
-			fail(w, domain.ErrUnauthorized)
-			return
-		}
-		tokens, e := s.activeSession(r.Context(), cookie.Value)
-		if e != nil {
-			fail(w, domain.ErrUnauthorized)
-			return
-		}
-		identity, e := s.keycloak.verifyAccessToken(tokens.AccessToken)
-		if e != nil {
-			fail(w, domain.ErrUnauthorized)
-			return
-		}
-		u, e := s.auth.ResolveKeycloak(r.Context(), identity.Subject, identity.Username, identity.DisplayName, identity.Email, identity.FirstName, identity.LastName)
-		if e != nil {
-			fail(w, e)
-			return
-		}
-		if e := s.syncKeycloakRole(r.Context(), u); e != nil {
-			fail(w, e)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, u)))
@@ -168,6 +155,7 @@ func (s *Server) Handler(origin string) http.Handler {
 	s.origin = strings.TrimRight(origin, "/")
 	mux := http.NewServeMux()
 	mux.Handle("/api/auth/exchange", method("POST", s.exchangeKeycloakCode))
+	mux.Handle("/api/auth/refresh", method("POST", s.refreshKeycloakToken))
 	mux.Handle("/api/auth/legacy-login", method("POST", s.legacyLogin))
 	mux.Handle("/api/auth/logout", method("POST", s.logoutKeycloakSession))
 	mux.Handle("/api/me", s.authn(method("GET", s.me)))
@@ -251,7 +239,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) legacyLogin(w http.ResponseWriter, r *http.Request) {
-	if s.keycloak == nil || s.sessions == nil {
+	if s.keycloak == nil {
 		fail(w, domain.ErrUnauthorized)
 		return
 	}

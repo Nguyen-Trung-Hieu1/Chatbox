@@ -19,16 +19,21 @@ application intentionally does not load `.env` files or contain API secrets.
 The frontend starts authorization code + PKCE login and receives the code at
 `/auth/callback`. It sends the code, verifier, and nonce to
 `POST /api/auth/exchange`. The backend exchanges the code with Keycloak,
-validates both tokens, stores the tokens in MongoDB, and returns an
-opaque HttpOnly, SameSite=Lax cookie. Frontend API calls use
-`credentials: "include"` and never handle access or refresh tokens. The
-backend refreshes expiring access tokens. `POST /api/auth/logout` deletes the
-server session and revokes the refresh token.
+validates the ID and access tokens, and returns the access token in the
+response. The frontend keeps the access token in memory and sends it as a
+Bearer token. The backend sets the refresh token in an HttpOnly cookie named
+by `REFRESH_COOKIE_NAME` (default `chatbox_refresh`) with path `/api/auth`.
+Frontend JavaScript cannot read that cookie. `POST /api/auth/refresh` uses the
+cookie to get a new access token and updates the cookie when Keycloak rotates
+the refresh token. On page reload, the frontend calls this endpoint to restore
+its in-memory access token. `POST /api/auth/logout` revokes the refresh token
+and clears the cookie.
 
-The cookie lasts up to 30 days, but Keycloak's SSO idle/max settings can end
-the login sooner. The `keycloak_sessions.expires_at` TTL index removes old
-records. Tokens in this collection are stored as plaintext, so MongoDB access
-and backups must be restricted. `COOKIE_SECURE=true` is required on HTTPS deployments.
+Neither user access nor refresh tokens are stored in the Chatbox backend
+database. The refresh cookie lasts up to 30 days, but Keycloak's SSO idle/max
+settings can end the login sooner. `COOKIE_SECURE=true` is required on HTTPS
+deployments. The backend accepts state-changing `/api/` requests only when
+their Origin matches `CORS_ORIGIN`, including refresh and logout requests.
 
 `AI_TOKEN_BUDGET` controls approximate input
 context size. Older unsummarized messages are incrementally folded into the

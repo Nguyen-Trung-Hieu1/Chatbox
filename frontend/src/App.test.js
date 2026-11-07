@@ -2,14 +2,15 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import Auth from './Auth';
-import { api } from './services/api';
+import { api, refreshSession } from './services/api';
 import { finishKeycloakLogin } from './keycloak';
 
-jest.mock('./services/api', () => ({ api: jest.fn(), streamChat: jest.fn() }));
+jest.mock('./services/api', () => ({ api: jest.fn(), refreshSession: jest.fn(), clearAccessToken: jest.fn(), streamChat: jest.fn() }));
 jest.mock('./keycloak', () => ({ finishKeycloakLogin: jest.fn(), logoutKeycloak: jest.fn() }));
 
 beforeEach(() => {
   window.localStorage.clear();
+  refreshSession.mockResolvedValue(null);
   api.mockImplementation((path) => {
     if (path === '/api/me') return Promise.resolve({ id: 'user-1', username: 'tester' });
     if (path === '/api/conversations') return Promise.resolve([]);

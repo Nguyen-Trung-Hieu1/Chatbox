@@ -6,7 +6,7 @@ import ChatView from './components/ChatView';
 import Sidebar from './components/Sidebar';
 import APIKeysPanel from './components/APIKeysPanel';
 import AdminDashboard from './components/AdminDashboard';
-import { api, streamChat } from './services/api';
+import { api, clearAccessToken, refreshSession, streamChat } from './services/api';
 import './App.css';
 
 const modelStorageKey = (userId) => `chatbox:selected-model:${userId}`;
@@ -43,6 +43,7 @@ function App() {
   const stopGenerating = () => streamController.current?.abort();
   const resetToLogin = () => {
     stopGenerating();
+    clearAccessToken();
     setCurrentUser(null);
     setConversations([]);
     setCurrentId('');
@@ -74,7 +75,7 @@ function App() {
     } catch (err) { handleApiError(err); }
   };
 
-  // Check the existing cookie-backed session once when the app starts.
+  // Restore the in-memory access token from the HttpOnly refresh cookie after a reload.
   useEffect(() => {
     if (sessionCheckStarted.current) return;
     sessionCheckStarted.current = true;
@@ -85,9 +86,11 @@ function App() {
         .finally(() => setCheckingSession(false));
       return;
     }
-    api('/api/me')
-      .then(setCurrentUser)
-      .catch(resetToLogin)
+    refreshSession()
+      .then((session) => {
+        if (session?.user) setCurrentUser(session.user);
+        else return api('/api/me').then(setCurrentUser).catch(resetToLogin);
+      })
       .finally(() => setCheckingSession(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
