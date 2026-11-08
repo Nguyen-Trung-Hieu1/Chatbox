@@ -1,0 +1,37 @@
+# One-time migration Job. This file is outside deploy/aws, so Argo CD does not
+# run it automatically. Apply only after the backend image containing the
+# migrate-mongo-postgres binary has been built and the target tables are empty.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate-mongo-postgres
+  namespace: chatbox1
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:main
+          imagePullPolicy: Always
+          command: ["/app/migrate-mongo-postgres"]
+          args: ["-apply"]
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: chatbox-backend-config
+                  key: MONGO_URI
+            - name: MONGO_DATABASE
+              value: Chatbox1
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: chatbox-postgres-auth
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: chatbox-postgres-auth
+                  key: password
