@@ -30,7 +30,7 @@ spec:
             - name: POSTGRES_ENABLED
               value: "true"
             - name: PGHOST
-              value: app-postgres.database.svc.cluster.local
+              value: app-postgres-v17.database.svc.cluster.local
             - name: PGDATABASE
               value: app_db
             - name: PGUSER
