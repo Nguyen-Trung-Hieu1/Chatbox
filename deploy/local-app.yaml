@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:sha-8fc711c773e0f16134b8663c3efbd3e089ae36ab
+          image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:sha-7c21fd649e3bebca2ae376925942649a4ecbc9a1
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef: {name: chatbox-backend-config}
@@ -45,7 +45,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:sha-8fc711c773e0f16134b8663c3efbd3e089ae36ab
+          image: ghcr.io/nguyen-trung-hieu1/chatbox-frontend:sha-7c21fd649e3bebca2ae376925942649a4ecbc9a1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
