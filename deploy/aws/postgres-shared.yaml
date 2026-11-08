@@ -1,0 +1,78 @@
+# New PostgreSQL instance for the planned Chatbox/Keycloak migration.
+# Create the app-postgres-auth Secret in namespace database before applying.
+# Do not switch either application to this Service until migration is verified.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: database
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-postgres-data
+  namespace: database
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-postgres
+  namespace: database
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: app-postgres
+  template:
+    metadata:
+      labels:
+        app: app-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          envFrom:
+            - secretRef:
+                name: app-postgres-auth
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: app-postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-postgres
+  namespace: database
+spec:
+  selector:
+    app: app-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
