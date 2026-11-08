@@ -27,6 +27,22 @@ spec:
               value: "true"
             - name: FREE_INITIAL_CREDITS
               value: "1000"
+            - name: POSTGRES_ENABLED
+              value: "true"
+            - name: PGHOST
+              value: app-postgres.database.svc.cluster.local
+            - name: PGDATABASE
+              value: app_db
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: chatbox-postgres-auth
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: chatbox-postgres-auth
+                  key: password
           ports:
             - containerPort: 8080
           readinessProbe:
