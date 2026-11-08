@@ -20,6 +20,8 @@ type Config struct {
 	KeycloakIssuer, KeycloakClientID                                                                         string
 	KeycloakAdminClientID, KeycloakAdminClientSecret                                                         string
 	KeycloakRolesEnabled                                                                                     bool
+	PostgresEnabled                                                                                          bool
+	PGHost, PGDatabase, PGUser, PGPassword                                                                   string
 	FreeModels, PaidModels                                                                                   []Model
 }
 
@@ -44,6 +46,13 @@ func Load(files ...string) (Config, error) {
 	c.KeycloakAdminClientID = value("KEYCLOAK_ADMIN_CLIENT_ID", "chatbox-backend-admin")
 	c.KeycloakAdminClientSecret = os.Getenv("KEYCLOAK_ADMIN_CLIENT_SECRET")
 	c.KeycloakRolesEnabled = strings.EqualFold(os.Getenv("KEYCLOAK_ROLES_ENABLED"), "true")
+	c.PostgresEnabled = strings.EqualFold(os.Getenv("POSTGRES_ENABLED"), "true")
+	c.PGHost = value("PGHOST", "app-postgres.database.svc.cluster.local")
+	c.PGDatabase = value("PGDATABASE", "app_db")
+	c.PGUser, c.PGPassword = os.Getenv("PGUSER"), os.Getenv("PGPASSWORD")
+	if c.PostgresEnabled && (!c.KeycloakRolesEnabled || c.PGUser == "" || c.PGPassword == "") {
+		return Config{}, fmt.Errorf("PostgreSQL requires Keycloak roles and PGUSER/PGPASSWORD")
+	}
 	if c.KeycloakRolesEnabled && c.KeycloakAdminClientSecret == "" {
 		return Config{}, fmt.Errorf("KEYCLOAK_ADMIN_CLIENT_SECRET is required when Keycloak roles are enabled")
 	}

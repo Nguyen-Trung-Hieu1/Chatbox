@@ -1,0 +1,27 @@
+# Manual, read-only repository smoke check; Argo CD does not apply this file.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: check-chatbox-postgres
+  namespace: chatbox1
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: check
+          image: ghcr.io/nguyen-trung-hieu1/chatbox-backend:main
+          imagePullPolicy: Always
+          command: ["/app/check-postgres"]
+          env:
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: chatbox-postgres-auth
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: chatbox-postgres-auth
+                  key: password

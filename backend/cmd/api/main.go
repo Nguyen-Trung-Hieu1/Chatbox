@@ -7,6 +7,7 @@ import (
 	"backend/internal/infrastructure/ai"
 	"backend/internal/infrastructure/keycloak"
 	"backend/internal/infrastructure/persistence"
+	"backend/internal/infrastructure/postgres"
 	"backend/internal/usecase"
 	"context"
 	"log"
@@ -21,13 +22,34 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	db, err := persistence.NewMongo(ctx, cfg.MongoURI, cfg.MongoDatabase)
-	if err != nil {
-		log.Fatal("Kết nối MongoDB thất bại: ", err)
+	var users domain.UserRepository
+	var sessions domain.SessionRepository
+	var conversations domain.ConversationRepository
+	var messages domain.MessageRepository
+	var billing domain.BillingRepository
+	var keysRepo domain.APIKeyRepository
+	var adminRepo usecase.AdminRepository
+	if cfg.PostgresEnabled {
+		pg, err := postgres.New(ctx, cfg.PGHost, cfg.PGDatabase, cfg.PGUser, cfg.PGPassword)
+		if err != nil {
+			log.Fatal("Kết nối PostgreSQL thất bại: ", err)
+		}
+		defer pg.Close()
+		users, sessions = pg, postgres.DisabledSessions{}
+		conversations, messages = postgres.ConversationRepository{Store: pg}, postgres.MessageRepository{Store: pg}
+		billing, keysRepo, adminRepo = pg, postgres.APIKeyRepository{Store: pg}, pg
+	} else {
+		db, err := persistence.NewMongo(ctx, cfg.MongoURI, cfg.MongoDatabase)
+		if err != nil {
+			log.Fatal("Kết nối MongoDB thất bại: ", err)
+		}
+		defer db.Client.Disconnect(context.Background())
+		users, sessions = persistence.NewUserRepository(db), persistence.NewSessionRepository(db)
+		conversations, messages = persistence.NewConversationRepository(db), persistence.NewMessageRepository(db)
+		billing, keysRepo, adminRepo = persistence.NewBillingRepository(db), persistence.NewAPIKeyRepository(db), persistence.NewAdminRepository(db)
 	}
-	defer db.Client.Disconnect(context.Background())
-	auth := usecase.NewAuth(persistence.NewUserRepository(db), persistence.NewSessionRepository(db), cfg.SessionTTL)
-	if cfg.AdminBootstrapUsername != "" {
+	auth := usecase.NewAuth(users, sessions, cfg.SessionTTL)
+	if !cfg.PostgresEnabled && cfg.AdminBootstrapUsername != "" {
 		if err := auth.BootstrapAdmin(ctx, cfg.AdminBootstrapUsername, cfg.AdminBootstrapPassword); err != nil {
 			log.Fatal("Không thể khởi tạo tài khoản admin: ", err)
 		}
@@ -39,9 +61,9 @@ func main() {
 		}
 		return out
 	}
-	chat := usecase.NewChat(persistence.NewConversationRepository(db), persistence.NewMessageRepository(db), ai.New(cfg.AIEndpoint, cfg.AIKey, cfg.AIModel), cfg.TokenBudget, persistence.NewBillingRepository(db), convert(cfg.FreeModels), convert(cfg.PaidModels), cfg.FreeCredits)
-	keys := usecase.NewAPIKeys(persistence.NewAPIKeyRepository(db), persistence.NewUserRepository(db))
-	admin := usecase.NewAdmin(persistence.NewAdminRepository(db), cfg.FreeCredits)
+	chat := usecase.NewChat(conversations, messages, ai.New(cfg.AIEndpoint, cfg.AIKey, cfg.AIModel), cfg.TokenBudget, billing, convert(cfg.FreeModels), convert(cfg.PaidModels), cfg.FreeCredits)
+	keys := usecase.NewAPIKeys(keysRepo, users)
+	admin := usecase.NewAdmin(adminRepo, cfg.FreeCredits)
 	if cfg.KeycloakRolesEnabled {
 		admin.UseKeycloakRoles(keycloak.NewAdmin(cfg.KeycloakIssuer, cfg.KeycloakAdminClientID, cfg.KeycloakAdminClientSecret))
 	}
