@@ -27,7 +27,8 @@ metadata:
   name: app-postgres
   namespace: database
 spec:
-  replicas: 1
+  # Retained for rollback; Chatbox and Keycloak now use app-postgres-v17.
+  replicas: 0
   strategy:
     type: Recreate
   selector:
